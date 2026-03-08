@@ -1,6 +1,52 @@
-ARCHITECTURE DOMAIN SKILL GUIDE:
-Focus on structural composition, modular assemblies, and realistic architectural proportions.
-- Build from the ground up: Define a clear base or foundation Workplane first.
-- Modularity: For complex structures like castles or houses, distinct components (e.g., `base_plate`, `main_keep`, `left_tower`, `right_tower`, `roof`) must be modeled as separate variables first.
-- Assembly: Combine the modular parts into the final `result` using sequential `.union()` operations. Ensure transformations (`.translate()`) correctly align parts flush on the floor/base without floating.
-- Safety: Avoid unnecessary mechanical details (small chamfers, threads, M3 holes) on architectural objects. Focus on bulk massing, walls, and prominent features (e.g., crenellations, pillars, arches).
+ARCHITECTURE DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Architecture is structural geometry. Every dimension has a load path or a proportion rule.
+Derive column spacing from span-to-depth ratios. Derive wall thickness from height-to-thickness rules.
+Never invent arbitrary dimensions for structural elements.
+
+KEY PROPORTIONING RULES:
+  # Wall thickness: height / 15 for load-bearing masonry; height / 20 for RC framed
+  wall_t = max(wall_h / 15.0, 20.0)          # mm — load-bearing minimum
+  # Column: diameter ≥ height / 12 (stone column slenderness limit)
+  col_dia = max(col_h / 12.0, 30.0)          # solid stone/concrete column
+  # Arch: rise ≈ span / 5 (segmental arch) to span / 2 (semicircular)
+  arch_rise = arch_span / 3.5                 # Gothic pointed approximation
+  # Floor-to-floor: residential 3000mm, commercial 4000mm, cathedral 8000–15000mm
+  # Merlon height (battlement): wall_h * 0.25; merlon width = merlon_h * 1.0
+  merlon_h = wall_h * 0.25
+  merlon_w = merlon_h
+  merlon_spacing = merlon_w * 2.0             # equal gap between merlons
+  # Staircase: riser_h = 170mm, tread_d = 250mm; n_steps = floor_h / riser_h
+  riser_h  = 170.0     # mm — standard riser height
+  tread_d  = 250.0     # mm — standard tread depth
+  n_steps  = int(floor_h / riser_h)           # number of steps
+  stair_L  = n_steps * tread_d               # total stair run
+  # Beam: depth = span / 12 (RC), span / 16 (steel); width = depth / 2
+  beam_d   = span / 12.0                     # RC beam depth
+  beam_w   = beam_d / 2.0                    # beam width
+  # Window proportion: window_h = wall_h * 0.45; window_w = window_h * 0.65
+  window_h = wall_h * 0.45
+  window_w = window_h * 0.65
+
+GEOMETRY TECHNIQUES:
+- Build GROUND UP: define each floor/level as a separate Z band; never let parts float
+- Wall grid: define wall_span, wall_t, wall_h; use mirror() for symmetric walls
+- Towers: always taller than walls by ≥ 30mm (visual dominance rule)
+- Battlements: use rarray to create evenly spaced merlon boxes, then cut into wall top
+  merlon_count = int(wall_span / (merlon_w + merlon_spacing))
+  merlons = (cq.Workplane("XY")
+             .workplane(offset=wall_h)
+             .rarray(merlon_w + merlon_spacing, 1, merlon_count, 1)
+             .box(merlon_w, wall_t*1.1, merlon_h))
+- Arches: two box jambs + semicircular or pointed void cut from wall body
+  arch_void = cq.Workplane("XY").circle(arch_span/2).extrude(wall_t+2).translate((x,y,arch_spring_h))
+  wall_with_arch = wall_solid.cut(arch_void)
+- Roof: wedge() for gabled on box walls; cone() for conical tower caps
+  cone_cap = cq.Workplane("XY").circle(tower_od/2).workplane(offset=cap_h).circle(0.1).loft()
+- Keep/donjon: must be tallest element — keep_h = tower_h * 1.3 minimum
+- Stacking rule: Z_top of level N = Z_bottom of level N+1 (no gaps, no overlaps)
+
+ASSERTIONS FOR ARCHITECTURE:
+  assert tower_h > wall_h, "Towers must be taller than walls (visual dominance)"
+  assert wall_t >= wall_h / 15.0, f"Wall {wall_t:.0f}mm too thin for height {wall_h:.0f}mm"
+  assert col_dia >= col_h / 12.0, f"Column {col_dia:.0f}mm too slender"

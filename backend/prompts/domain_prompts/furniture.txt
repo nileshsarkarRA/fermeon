@@ -1,7 +1,192 @@
-FURNITURE DOMAIN SKILL GUIDE:
-Focus on physical stability, ergonomic proportions, modern aesthetics, and symmetric assembly.
-- CRITICAL PROPORTIONS: Distinguish carefully between 'elevation' and 'thickness'. For example, `seat_height` means the distance from the floor to the seat (~450mm). `seat_thickness` is the mass of the seat plate itself (~20-40mm). Do NOT extrude a seat 450mm thick into a giant block!
-- AESTHETICS (SMOOTH EDGES): Furniture should look modern and comfortable, not blocky. You MUST apply fillets or chamfers to user-facing edges. For instance, `seat.edges("|Z").fillet(10)` or `.edges(">Z").fillet(5)` to soften the top perimeter.
-- Z-AXIS ORIENTATION: Standardize your builds. Z=0 is the floor. Legs extend from `Z=0` up to `Z=seat_height - seat_thickness`. The seat rests on top of the legs. The backrest extends upwards from the seat.
-- Symmetric repetition: For legs and armrests, define the core logic once. Use transformations or offsets accurately to place the 4 legs at the corners of the base structure (e.g., `seat_width / 2`, `-seat_depth / 2`).
-- Combination: Define the `seat`, `backrest`, `legs`, and `arms` as cleanly separated CadQuery variables and combine them at the end into `result` using `.union()`.
+FURNITURE DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Furniture geometry is ergonomic anthropometry encoded as parameters.
+Every dimension derives from a primary measure (total height or seat height).
+Never invent numbers — derive everything from the proportioning table below.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ERGONOMIC PROPORTIONING RULES (ISO 9241 / EN 1335):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Chair / Seating
+  seat_h       = total_h * 0.28          # floor to seat surface: ~400-450mm
+  back_h       = total_h * 0.45          # above seat: ~600-700mm
+  seat_depth   = seat_w * 0.75           # typical seat depth ratio
+  armrest_h    = seat_h + 230            # armrest above seat: EN 1335 = 230mm
+  leg_dia      = max(seat_h / 15.0, 25.0) # min 25mm dia legs
+  leg_inset    = leg_dia * 1.5            # inset from seat edge
+
+  # Table
+  table_h      = 750                      # mm — standard dining/work height
+  top_t        = max(table_w / 50.0, 18.0) # thickness proportional to span, min 18mm
+  leg_dia_t    = top_t * 2.0              # table leg dia = 2× top thickness
+  leg_inset_t  = leg_dia_t * 2.0          # inset from table corner
+
+  # Sofa / Upholstered (ISO dimensions + EN 1335)
+  seat_h_sofa  = 400.0                    # mm — standard sofa seat height (floor to seat top)
+  cushion_t    = 120.0                    # mm — upholstered seat pad thickness
+  leg_height   = seat_h_sofa - cushion_t  # mm — leg height = seat_h - cushion_t = 280mm typical
+  back_h_sofa  = 650.0                    # mm — backrest height above seat top
+  back_depth   = 130.0                    # mm — backrest thickness
+  arm_h_sofa   = 300.0                    # mm — armrest height above seat bottom
+  arm_w_sofa   = 120.0                    # mm — armrest width (X)
+  arm_h_above  = 230.0                    # mm — armrest above seat (EN 1335 check)
+  leg_dia_sofa = max(leg_height / 10.0, 40.0)  # structural: H/10, min 40mm
+  leg_inset_x  = leg_dia_sofa / 2.0 + 30.0    # inset from seat edge
+  leg_inset_y  = leg_dia_sofa / 2.0 + 30.0
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SOFA Z-STACK (CRITICAL — verify EVERY sofa generation):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Z=0                   → Floor
+  Z=0 to Z=leg_height   → Legs (extrude from Z=0)
+  Z=leg_height          → Bottom of seat cushion (MUST equal top of legs)
+  Z=leg_height+cushion_t → Top of seat (seat_top_z)
+  Z=seat_top_z          → Bottom of backrest (MUST equal seat_top_z)
+  Z=leg_height          → Bottom of armrests (start at seat bottom)
+
+  # Correct seat cushion:
+  seat = (cq.Workplane("XY")
+          .box(seat_length, seat_depth, cushion_t, centered=(True, True, False))
+          .translate((0, 0, leg_height)))         # bottom at Z=leg_height
+
+  # Correct backrest (flush to rear edge, starts on top of seat):
+  back_y   = -(seat_depth/2 - back_depth/2)      # flush with rear
+  backrest = (cq.Workplane("XY")
+              .box(seat_length, back_depth, back_h_sofa, centered=(True, True, False))
+              .translate((0, back_y, seat_top_z)))  # bottom at Z=seat_top_z
+
+  # Correct legs (pushPoints on XY plane, extrude to leg_height):
+  leg_pts = [
+      ( seat_length/2 - leg_inset_x,  seat_depth/2 - leg_inset_y),
+      (-seat_length/2 + leg_inset_x,  seat_depth/2 - leg_inset_y),
+      ( seat_length/2 - leg_inset_x, -seat_depth/2 + leg_inset_y),
+      (-seat_length/2 + leg_inset_x, -seat_depth/2 + leg_inset_y),
+  ]
+  legs = cq.Workplane("XY").pushPoints(leg_pts).circle(leg_dia/2).extrude(leg_height)
+
+  # Correct armrests (full depth, sides of seat, from seat bottom to armrest height):
+  left_arm  = (cq.Workplane("XY")
+               .box(arm_w, seat_depth, arm_h, centered=(True, True, False))
+               .translate(( seat_length/2 - arm_w/2, 0, leg_height)))
+  right_arm = (cq.Workplane("XY")
+               .box(arm_w, seat_depth, arm_h, centered=(True, True, False))
+               .translate((-seat_length/2 + arm_w/2, 0, leg_height)))
+
+SOFA SEATING SIZE GUIDE:
+  Love seat (2-seater):  seat_length = 1400-1600mm
+  Three-seater:          seat_length = 1900-2200mm
+  Sectional corner unit: seat_length = 2500-3000mm
+  Chaise longue:         extend seat_depth to 1200mm on one side
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TAPERED LEGS (loft — preferred over plain cylinder):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Build ONE leg at origin then translate 4 copies — DO NOT use pushPoints with loft
+  leg_dia_bot = 28.0  # mm floor (narrow aesthetic foot)
+  leg_dia_top = 50.0  # mm frame junction (structural width)
+  base_leg = (
+      cq.Workplane("XY")
+      .circle(leg_dia_bot / 2.0)
+      .workplane(offset=leg_height)
+      .circle(leg_dia_top / 2.0)
+      .loft()                    # produces a clean conical taper
+  )
+  leg_fr = base_leg.translate(( x1,  y1, 0.0))
+  leg_fl = base_leg.translate(( x2,  y1, 0.0))
+  leg_rr = base_leg.translate(( x1,  y2, 0.0))
+  leg_rl = base_leg.translate(( x2,  y2, 0.0))
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STRUCTURAL SEAT RAIL FRAME (always include for sofas/chairs):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # Rectangular stretchers under the seat cushion — connect all 4 legs
+  # Rail sits with its TOP flush with leg tops (Z=leg_height)
+  rail_w     = 65.0   # cross-section face width
+  rail_h     = 90.0   # cross-section vertical height
+  rail_z_bot = leg_height - rail_h   # base of rail above floor
+  front_rail = (cq.Workplane("XY")
+      .box(seat_length, rail_w, rail_h, centered=(True, True, False))
+      .translate((0.0, seat_depth/2.0 - rail_w/2.0, rail_z_bot)))
+  rear_rail  = (cq.Workplane("XY")
+      .box(seat_length, rail_w, rail_h, centered=(True, True, False))
+      .translate((0.0, -seat_depth/2.0 + rail_w/2.0, rail_z_bot)))
+  left_rail  = (cq.Workplane("XY")
+      .box(rail_w, seat_depth - rail_w*2, rail_h, centered=(True, True, False))
+      .translate((seat_length/2.0 - rail_w/2.0, 0.0, rail_z_bot)))
+  right_rail = (cq.Workplane("XY")
+      .box(rail_w, seat_depth - rail_w*2, rail_h, centered=(True, True, False))
+      .translate((-seat_length/2.0 + rail_w/2.0, 0.0, rail_z_bot)))
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BACKREST TILT (ergonomic recline):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  back_tilt_deg = 12.0  # degrees rearward from vertical [ISO ergonomic: 5-15°]
+  back_y        = -(seat_depth/2.0 - back_t/2.0)   # centre Y (flush rear)
+  back_pivot_y  = back_y + back_t/2.0              # front-face Y = tilt pivot
+  back_upright  = (cq.Workplane("XY")
+      .box(clear_seat_w, back_t, back_h_above, centered=(True, True, False))
+      .translate((0.0, back_y, seat_top_z)))
+  backrest = back_upright.rotate(
+      (0.0,   back_pivot_y, seat_top_z),  # pivot point (bottom-front corner)
+      (100.0, back_pivot_y, seat_top_z),  # second point on X-axis
+      -back_tilt_deg)                      # negative = tilt top rearward
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ARMREST WITH OVERHANGING CAP:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  arm_cap_t = 35.0    # mm — upholstered cap thickness
+  arm_cap_extra = 20.0  # mm — cap overhang beyond arm core on each side (X)
+  arm_core_h = arm_h_total - arm_cap_t
+  left_core = (cq.Workplane("XY")
+      .box(arm_w, seat_depth, arm_core_h, centered=(True, True, False))
+      .translate((seat_length/2.0 - arm_w/2.0, 0.0, leg_height)))
+  left_cap  = (cq.Workplane("XY")
+      .box(arm_w + arm_cap_extra*2, seat_depth, arm_cap_t, centered=(True, True, False))
+      .translate((seat_length/2.0 - arm_w/2.0, 0.0, leg_height + arm_core_h)))
+  left_armrest = left_core.union(left_cap)
+  # Mirror for right armrest (negate X translate)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CUSHION DIVIDER GROOVES (multi-seater section lines):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  groove_w = 10.0  # mm groove width
+  groove_d = 30.0  # mm groove depth
+  groove_x = clear_seat_w / 3.0 / 2.0   # X position of first cut
+  groove_1 = (cq.Workplane("XY")
+      .box(groove_w, seat_depth, groove_d, centered=(True, True, False))
+      .translate(( groove_x, 0.0, seat_top_z - groove_d)))
+  groove_2 = (cq.Workplane("XY")
+      .box(groove_w, seat_depth, groove_d, centered=(True, True, False))
+      .translate((-groove_x, 0.0, seat_top_z - groove_d)))
+  seat_cushion = seat_pad.cut(groove_1).cut(groove_2)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GEOMETRY TECHNIQUES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Z=0 is the floor. Legs from Z=0 to Z=leg_height. Seat bottom at Z=leg_height EXACTLY.
+- Use centered=(True, True, False) on all box() calls → bottom face sits at correct Z
+- Build each sub-assembly separately: legs, rail frame, seat pad, backrest, armrests → union
+- ALL PARTS MUST TOUCH: rail tops join at Z=leg_height, seat bottom at Z=leg_height,
+  backrest base at Z=seat_top_z, armrests start at Z=leg_height. NO floating geometry.
+- Legs with tapered loft: build at origin, then .translate() to each corner position
+- Avoid .fillet() on final unions (BRep crash risk) — only fillet individual parts before union
+- Cabinet/drawer bodies: use shell() to hollow out — wall_t = thickness / 2 minimum
+- For cushion separation: .cut() shallow box grooves from the top face downward
+- NEVER offset Z by half the part height in translate: use centered=(True,True,False) + correct Z
+
+⛔ FURNITURE ANTI-PATTERNS — NEVER DO THESE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ❌ Using medical device names ("spinal fusion cage", "implant", "stent") — this is FURNITURE
+  ❌ translate((0, 0, -height/2 + big_number)) — wrong Z stacking always causes disconnected parts
+  ❌ All parts at different arbitrary Z values with no logical z-stack hierarchy
+  ❌ Support rails floating 1200mm above the floor with no connection to the frame
+  ❌ Mounting holes cut into a sofa seat (this is furniture, not a bolted flange)
+  ❌ Using rarray for leg positions — always use pushPoints with 4 explicit coordinates
+  ❌ Parts larger than the room (Z values of 1400mm on a sofa that's only 420mm tall)
+
+STRUCTURAL VALIDATION (run these asserts before geometry):
+  assert arm_h_total > cushion_t, "Armrests must clear above seat cushion top"
+  assert leg_dia_top >= 30.0, f"Leg dia {leg_dia_top:.1f}mm below safe minimum (30mm)"
+  assert back_h_above / back_t <= 12.0, f"Backrest H/t={back_h_above/back_t:.1f} > 12"
+  assert seat_length > seat_depth, "Sofa should be wider than it is deep"
+  assert leg_height > 0, "cushion_t must be less than seat_h_target"

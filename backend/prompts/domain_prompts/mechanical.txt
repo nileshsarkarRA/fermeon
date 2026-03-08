@@ -1,6 +1,31 @@
-MECHANICAL ENGINEERING DOMAIN SKILL GUIDE:
-Focus on structural integrity, proper tolerance assumptions, and standard hardware interfaces.
-- Use metric ISO standards for all bolt patterns and threads (e.g., M3, M4, M5 clearance holes).
-- Default to clearance holes when a screw or bolt is mentioned unless threading is explicitly requested.
-- When creating brackets or load-bearing plates, rely on generous fillets (~2mm+) on interior stress concentrations.
-- If part geometry requires ribs or gussets for stiffening, include them parametrically.
+MECHANICAL ENGINEERING DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Mechanical parts are load-path objects. Size every feature from the force it carries.
+Never guess a wall or plate thickness — derive it from bending moment, shear, or Hertz contact.
+
+KEY PHYSICS FORMULAS:
+  # Plate bending — simply supported under uniform load
+  plate_t = math.sqrt(1.5 * pressure * plate_span**2 / sigma_allow)   # thin plate theory
+  # Shaft diameter from torque
+  shaft_dia = (16 * torque / (math.pi * tau_allow))**(1/3)            # solid shaft
+  shaft_dia = max(shaft_dia, bore_dia * 1.2)                          # min: 20% over bore
+  # Gear module from power
+  pitch_dia = module * teeth                                          # ISO 54
+  addendum  = 1.0 * module
+  dedendum  = 1.25 * module
+  # Column buckling: wall ≥ OD/15; slenderness L/D < 15 for compression
+  col_wall  = max(col_od / 15.0, 2.0)
+
+ISO STANDARDS TABLE (always cite these in code comments):
+  Clearance holes:  M3→3.4mm, M4→4.5mm, M5→5.5mm, M6→6.6mm, M8→9.0mm   [ISO 273 medium]
+  Running fits:     diametral_clearance = 0.002 × shaft_dia               [ISO H7/g6]
+  Bolt circles:     bolt_circle_r = 0.72 × flange_od / 2                  [ASME B16.5]
+  Key/keyway depth: key_depth = shaft_dia / 7.5                            [DIN 6885]
+  Press fit:        interference = 0.001 × shaft_dia (light press)        [ISO P7/h6]
+
+GEOMETRY TECHNIQUES:
+- Build each subcomponent (shaft, hub, flange, boss) as a separate variable
+- Union solids FIRST, then cut all holes/bores into the unified body
+- Use pushPoints with exact corner coordinates for bolt patterns — never rarray
+- Ribs: thickness = 0.6 × wall_t; height = 3–5 × wall_t; spacing = 4 × wall_t
+- Gusset triangles via wedge() primitive, positioned at load concentration points

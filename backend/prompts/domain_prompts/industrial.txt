@@ -1,0 +1,43 @@
+INDUSTRIAL ENGINEERING DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Industrial parts are process objects. Geometry is defined by flow rates, pressures,
+temperatures, and material properties. Size everything from the process spec — not aesthetics.
+
+KEY PHYSICS FORMULAS:
+
+  Pressure Vessels (ASME VIII):
+    wall_t = P * R / (sigma_allow / SF - 0.6 * P)     # ASME VIII UG-27 exact form
+    wall_t = max(wall_t, bore_dia / 20.0)              # practical minimum D/20
+    nozzle_t = max(0.875 * nominal_t, 1.0)             # nozzle neck thinner allowance
+
+  Pipe Sizing (flow rate → bore):
+    bore_area = flow_m3s / v_target                    # target v=1-3m/s liquids, 15-25m/s gas
+    bore_dia  = 2 * math.sqrt(bore_area / math.pi)
+    # Round up to nearest standard DN: 15,20,25,32,40,50,65,80,100,125,150mm
+
+  Heat Exchanger (shell & tube):
+    Q = U * A * LMTD                                   # heat duty equation
+    A_min = Q / (U * LMTD)                             # min transfer area
+    tube_count = A_min / (math.pi * tube_od * tube_L)  # number of tubes needed
+    pitch = tube_od * 1.25                             # triangular pitch: 1.25× OD (TEMA)
+
+  Valve Flow Coefficient:
+    Cv = flow_gpm / math.sqrt(delta_P_psi / SG)       # flow coefficient
+    valve_bore = math.sqrt(Cv / 0.06) * 25.4          # mm — approximate
+
+GEOMETRY TECHNIQUES:
+  - Pressure vessel: revolve outer profile → shell(wall_t) → add nozzle cylinders
+  - Nozzle attachment: cylinder() at nozzle position, union to shell, cut bore through both
+  - Flanged connections: always use ASME B16.5 proportions (see mechanical domain)
+  - Pipe bends: sweep a circular profile along a toroidal spine (torus intersection)
+    bend_spine = cq.Workplane("XZ").radiusArc((bend_r, 0, bend_r), bend_r)
+    bend_pipe  = cq.Workplane("XY").circle(od/2).sweep(bend_spine)
+  - Valve body: union two orthogonal pipe stubs + central sphere/box body
+  - Manway (access port): cylinder + flange ring on vessel shell
+
+STANDARDS:
+  Pipe schedules: Sch 40 wall_t ≈ bore_dia * 0.083 (approx for DN25-100)
+  Flange class:   ASME B16.5 Class 150 → 300 → 600 based on P×T product
+  Vessel heads:   Use 2:1 semi-ellipsoidal head: head_h = bore_dia / 4
+  Thermowell:     OD = 19mm, wall_t = 3mm, insertion_L = vessel_od * 0.6
+  Safety valve:   inlet bore = vessel_nozzle × 0.7 (typically)

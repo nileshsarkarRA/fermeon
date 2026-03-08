@@ -1,4 +1,4 @@
-# 🏗️ AI CAD GENERATOR — MULTI-LLM BUILD GUIDE
+# AI CAD GENERATOR — MULTI-LLM BUILD GUIDE
 > Works with ANY LLM: Ollama (local) · Claude · Gemini · OpenAI · Mistral · Groq · Cohere
 > One prompt format → any model → accurate CadQuery code → real STEP/STL files
 

@@ -1,56 +1,40 @@
 import cadquery as cq
 
 # ── Parameters ────────────────────────────────────────────────
-seat_width = 450        # mm
-seat_depth = 450        # mm
-seat_thickness = 30     # mm (NOT seat height! This is just the plate thickness)
-seat_elevation = 450    # mm (Height from floor to top of seat)
+# IMPORTANT: In CadQuery, box() is CENTERED in all 3 axes by default.
+# To build furniture correctly: legs go from Z=0 to Z=leg_height,
+# then the tabletop sits on top starting at Z=leg_height.
 
-leg_diameter = 35       # mm
-leg_inset = 40          # mm (distance from edge of seat to center of leg)
+table_length    = 1200   # mm  (X dimension)
+table_width     = 800    # mm  (Y dimension)
+top_thickness   = 30     # mm  (Z dimension of the top slab)
+leg_height      = 720    # mm  (floor to underside of top)
+leg_dia         = 60     # mm
+leg_inset       = 80     # mm  (distance from outer edge to leg centre)
 
-backrest_width = 450    # mm
-backrest_height = 400   # mm
-backrest_thickness = 25 # mm
-
-# Derived
-leg_length = seat_elevation - seat_thickness
-
-# ── Seat ─────────────────────────────────────────────────────
-# Center of seat is at X=0, Y=0. Z is positioned at the correct elevation.
-seat = (
+# ── Tabletop ──────────────────────────────────────────────────
+# centered=(True, True, False) → centred in X/Y, bottom face flush with workplane
+# Translate upward so bottom face sits exactly at Z=leg_height
+top = (
     cq.Workplane("XY")
-    .workplane(offset=leg_length) # Start bottom of seat here
-    .box(seat_width, seat_depth, seat_thickness, centered=(True, True, False)) # Extrude upwards
-    .edges("|Z").fillet(15) # Smooth vertical corners
-    .edges(">Z").fillet(5)  # Soften top edge for comfort
+    .box(table_length, table_width, top_thickness, centered=(True, True, False))
+    .translate((0, 0, leg_height))
 )
 
-# ── Legs ─────────────────────────────────────────────────────
-# We define a common sketch for all 4 legs then extrude
-pts = [
-    (seat_width/2 - leg_inset, seat_depth/2 - leg_inset),
-    (-seat_width/2 + leg_inset, seat_depth/2 - leg_inset),
-    (seat_width/2 - leg_inset, -seat_depth/2 + leg_inset),
-    (-seat_width/2 + leg_inset, -seat_depth/2 + leg_inset)
+# ── Four legs ─────────────────────────────────────────────────
+# pushPoints sets XY centres; extrude goes from Z=0 upward to Z=leg_height
+leg_pts = [
+    ( table_length/2 - leg_inset,  table_width/2 - leg_inset),
+    (-table_length/2 + leg_inset,  table_width/2 - leg_inset),
+    ( table_length/2 - leg_inset, -table_width/2 + leg_inset),
+    (-table_length/2 + leg_inset, -table_width/2 + leg_inset),
 ]
-
 legs = (
-    cq.Workplane("XY") # Start at Z=0 (floor)
-    .pushPoints(pts)
-    .circle(leg_diameter / 2)
-    .extrude(leg_length) # Extrude up to the bottom of the seat
+    cq.Workplane("XY")       # floor level (Z=0)
+    .pushPoints(leg_pts)
+    .circle(leg_dia / 2)
+    .extrude(leg_height)     # reaches exactly to bottom of top slab
 )
 
-# ── Backrest ─────────────────────────────────────────────────
-backrest = (
-    cq.Workplane("XY")
-    .workplane(offset=seat_elevation) # Start at top of seat
-    .center(0, seat_depth/2 - backrest_thickness/2) # Move to back edge
-    .box(backrest_width, backrest_thickness, backrest_height, centered=(True, True, False)) # Extrude up
-    .edges("|Z").fillet(10)
-    .edges(">Z").fillet(10)
-)
-
-# ── Combine all parts into the chair assembly ───────────────
-result = seat.union(legs).union(backrest)
+# ── Final assembly ────────────────────────────────────────────
+result = top.union(legs)

@@ -199,3 +199,151 @@ class LLMGateway:
         completion_tokens = getattr(usage, "completion_tokens", 0) or 0
         total_tokens = prompt_tokens + completion_tokens
         return round((total_tokens / 1000) * rate, 6)
+
+    async def enhance_prompt_text(
+        self,
+        prompt: str,
+        model: str,
+        user_api_key: Optional[str] = None,
+    ) -> dict:
+        """
+        Trip 1: Enhance the user prompt using the Leap 71 enhancer template.
+        Adds geometric precision, domain classification, and engineering parameters.
+        Soft-fails: returns the original prompt if the LLM call fails.
+        Returns: {success, enhanced_prompt, model_used, usage}
+        """
+        if model not in SUPPORTED_MODELS:
+            return {"success": True, "enhanced_prompt": prompt, "model_used": model, "usage": {}}
+
+        model_config = SUPPORTED_MODELS[model]
+        api_key = get_api_key_for_model(model_config, user_api_key)
+        api_base = self._get_api_base(model_config)
+
+        from pathlib import Path
+        enhancer_path = Path(__file__).parent.parent.parent / "prompts" / "enhancer_prompt.txt"
+        try:
+            enhancer_system = enhancer_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return {"success": True, "enhanced_prompt": prompt, "model_used": model, "usage": {}}
+
+        messages = format_prompt_for_model(
+            model=model,
+            system_prompt=enhancer_system,
+            user_prompt=prompt,
+            examples=[],
+            model_config=model_config,
+        )
+
+        try:
+            kwargs: dict = dict(
+                model=model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=800,
+                timeout=60,
+            )
+            if api_key:
+                kwargs["api_key"] = api_key
+            if api_base:
+                kwargs["api_base"] = api_base
+
+            response = await litellm.acompletion(**kwargs)
+            enhanced = response.choices[0].message.content.strip()
+
+            return {
+                "success": True,
+                "enhanced_prompt": enhanced or prompt,
+                "model_used": model,
+                "usage": {
+                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0) or 0,
+                    "completion_tokens": getattr(response.usage, "completion_tokens", 0) or 0,
+                    "estimated_cost_usd": self._estimate_cost(model, response.usage),
+                },
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            if api_key and api_key in error_msg:
+                error_msg = error_msg.replace(api_key, "[REDACTED]")
+            # Soft-fail: return original prompt so the pipeline can continue
+            return {
+                "success": False,
+                "error": error_msg,
+                "enhanced_prompt": prompt,
+                "model_used": model,
+                "usage": {},
+            }
+
+    async def generate_cem_params(
+        self,
+        prompt: str,
+        model: str,
+        schema_json: str,
+        cem_name: str,
+        user_api_key: Optional[str] = None,
+    ) -> dict:
+        """
+        Leap 71 / Noyron approach: ask LLM to extract CEM parameters as JSON.
+        The LLM only outputs numbers and strings — CadQuery syntax errors are impossible.
+        Returns: {success, params: dict, raw_response, model_used, usage?}
+        """
+        if model not in SUPPORTED_MODELS:
+            return {"success": False, "error": f"Unknown model: {model}", "model_used": model}
+
+        model_config = SUPPORTED_MODELS[model]
+        api_key = get_api_key_for_model(model_config, user_api_key)
+        api_base = self._get_api_base(model_config)
+
+        from .prompt_formatter import format_cem_prompt_for_model
+        messages = format_cem_prompt_for_model(
+            model=model,
+            cem_name=cem_name,
+            schema_json=schema_json,
+            user_prompt=prompt,
+            model_config=model_config,
+        )
+
+        try:
+            kwargs: dict = dict(
+                model=model,
+                messages=messages,
+                temperature=0.1,
+                max_tokens=512,
+                timeout=60,
+            )
+            if api_key:
+                kwargs["api_key"] = api_key
+            if api_base:
+                kwargs["api_base"] = api_base
+
+            response = await litellm.acompletion(**kwargs)
+            raw_text = response.choices[0].message.content
+
+            from .response_parser import extract_json_params
+            params = extract_json_params(raw_text)
+
+            if params is None:
+                return {
+                    "success": False,
+                    "error": f"LLM did not return valid JSON. Response: {raw_text[:300]!r}",
+                    "model_used": model,
+                    "raw_response": raw_text,
+                }
+
+            return {
+                "success": True,
+                "params": params,
+                "raw_response": raw_text,
+                "model_used": model,
+                "usage": {
+                    "prompt_tokens": getattr(response.usage, "prompt_tokens", 0) or 0,
+                    "completion_tokens": getattr(response.usage, "completion_tokens", 0) or 0,
+                    "estimated_cost_usd": self._estimate_cost(model, response.usage),
+                },
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            if api_key and api_key in error_msg:
+                error_msg = error_msg.replace(api_key, "[REDACTED]")
+            return {"success": False, "error": error_msg, "model_used": model}

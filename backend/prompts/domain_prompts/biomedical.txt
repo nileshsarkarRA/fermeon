@@ -1,0 +1,57 @@
+BIOMEDICAL / MEDICAL DEVICES DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Medical parts are patient-adjacent. Every dimension derives from anatomy,
+biomechanics, or implant standards. Geometry must be bio-compatible and manufacturable
+from sterile materials. Never guess biological dimensions — use anthropometric tables.
+
+KEY PHYSICS FORMULAS:
+
+  Implant Sizing (Cortical Bone Mechanics):
+    # Bone screw: pull-out per thread turn ≈ tau_bone × pi × screw_dia × pitch
+    tau_cortical = 50.0          # MPa — cortical bone shear strength
+    F_pullout_per_turn = tau_cortical * math.pi * screw_dia * thread_pitch
+    # Required engagement: L_engaged = F_req / F_pullout_per_turn
+    screw_L_min = max(L_engaged + 4.0, 3 * screw_dia)  # 4mm safety margin
+
+  Prosthetic Limb (Structural):
+    # Von Kármán: tibial prosthetic socket — peak load = 3× body weight
+    F_peak = 3.0 * body_mass_kg * 9.81    # N
+    # Tube wall from bending: M = F × effective_arm
+    wall_t_prosthetic = math.sqrt(F_peak * arm_L / (math.pi * sigma_allow * (od/2)**2))
+    # Typical: CFRP tube OD 40-50mm, wall_t 2-4mm; titanium OD 35mm, wall 3mm
+
+  Orthotic / Brace:
+    # Shell thickness from load: typically 3-6mm HDPE, 2-3mm carbon fibre
+    brace_t = max(load_N * 0.002, 3.0)   # rough rule: 2mm/kN, min 3mm
+
+  Anthropometric Reference Dimensions (50th percentile, ISO 7250):
+    femur_L          = 440    # mm — male, seated knee to hip
+    tibia_L          = 380    # mm — male, knee to ankle
+    femur_head_dia   = 46     # mm — femoral head (hip replacement)
+    acetabular_cup   = 54     # mm — typical acetabular cup OD
+    tibial_plateau_w = 75     # mm — tibial plateau width (knee implant)
+    vertebral_body_h = 24     # mm — lumbar vertebra body height
+    intervertebral_h = 8      # mm — disc height (spinal cage target)
+    wrist_screw_dia  = 2.7    # mm — typical distal radius locking screw
+    long_bone_screw  = 4.5    # mm — cortical bone screw (femur/tibia)
+
+GEOMETRY TECHNIQUES:
+  - Bone screw: cylinder (core_dia) → revolve helical profile → cut thread helix
+    Simplified: cylinder with minor_dia, then external thread as revolve of wedge profile
+  - Tibial tray (knee): D-shaped plate → screw holes via pushPoints → stem cylinder below
+  - Femoral head (hip): sphere(head_dia/2) → cylinder neck → taper to stem cone
+  - Orthotic shell: loft between anatomical cross-sections (ellipses at each level)
+    calf_section  = cq.Workplane("XY").ellipse(calf_w/2, calf_d/2)
+    ankle_section = cq.Workplane("XY").workplane(offset=300).ellipse(ankle_w/2, ankle_d/2)
+    shell_outer = cq.Workplane("XY").loft(...)
+    result = shell_outer.shell(-brace_t)
+  - Surgical retractor: sweep blade profile along curved spine, add handle grip
+  - Spinal cage: hollow cylinder or D-shape, serrated endplates (pattern via rarray cutouts)
+
+MATERIALS AND MANUFACTURING:
+  AM titanium (Ti-6Al-4V): sigma_allow=700MPa, min wall 0.8mm, porous lattice 0.3mm
+  UHMWPE (acetabular liner): sigma_allow=20MPa, min wall 4mm, no sharp edges
+  PEEK (spinal): sigma_allow=100MPa, min wall 2mm, good for imaging compatibility
+  ISO 5832 / ASTM F136: material standards for implants
+  ISO 13485: quality system; all geometry must be fully parametric + traceable
+  Sterilisation: no blind pockets < 3mm — cannot be autoclaved; ensure flush access

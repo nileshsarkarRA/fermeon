@@ -1,5 +1,31 @@
-AEROSPACE ENGINEERING DOMAIN SKILL GUIDE:
-Focus on weight reduction, aerodynamic smoothing (continuous curvature), and high-stress resilience.
-- All non-mating corners should have generous fillets/radii to minimize stress risers (never leave sharp interior 90-degree corners).
-- If creating a flange or mounting plate, consider adding a pocketing/lightweighting operation (cutting out interior mass) if the wall thickness allows it safely.
-- For fluid flow components (nozzles, ducts), rely heavily on lofts and smooth transitions.
+AEROSPACE ENGINEERING DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Every aerospace part is a performance model. Geometry is the OUTPUT of physics, not the input.
+Always derive wall thickness, cross-section, and taper from governing equations first.
+
+KEY PHYSICS FORMULAS:
+  # Nozzle throat area (rocket/jet) — conservation of mass through choked flow
+  A_throat = mdot / (P0 * sqrt(gamma / (R_gas * T0)) * ((gamma+1)/2)**(-(gamma+1)/(2*(gamma-1))))
+  # Nozzle expansion area ratio (isentropic, Mach 2.0 exit)
+  area_ratio = 1.687  # A_exit / A_throat for M=2, γ=1.4  (isentropic table)
+  # Wing spar wall — bending: wall_t = M_bending * c / (sigma_allow * I)  (simplified)
+  spar_wall_t = max(sweep_chord / 40.0, 1.5)    # practical: chord/40, min 1.5mm
+  fuselage_skin_t = max(cabin_dia / 200.0, 1.0) # shell: D/200, min 1mm (pressurised)
+
+GEOMETRY TECHNIQUES:
+- Nozzle / duct: loft between circular profiles at inlet, throat, and exit — NEVER extrude
+- Wing aerofoil: spline the aerofoil section profile, then extrude/loft to tip with taper
+- Fuselage: revolve a profile, shell() to correct skin thickness
+- Brackets/lugs: derive from load path — material at stress concentration lines only
+
+MANUFACTURING (AM metal — SLM/EBM):
+  min_wall = 0.8   # mm  Minimum printable wall (SLM steel/Ti-6Al-4V)
+  overhang_angle_max = 45.0  # degrees from horizontal — beyond this: add support or re-orient
+  min_hole_dia = 1.0  # mm — below this, drill post-process
+
+SIZING RULES:
+- Wall thickness from pressure: wall_t = P * R / (sigma_allow / SF)    # thin-wall pressure vessel
+- Minimum L/D ≥ 3 for any cylindrical section in flow path (prevents flow separation)
+- Lightweighting pockets: remove material where stress < 10% of allowable
+- All internal corners: r ≥ 2×wall_t to prevent notch fatigue
+- Fastener holes: clearance = bolt_dia × 1.08 (ISO 273 medium fit)

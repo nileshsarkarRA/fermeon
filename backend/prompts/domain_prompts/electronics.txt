@@ -1,0 +1,50 @@
+ELECTRONICS / CONSUMER ELECTRONICS DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Electronic enclosures are thermal and EMC objects. Wall thickness, vent area,
+and PCB standoff height all derive from thermal dissipation, shielding, and IPC standards.
+
+KEY PHYSICS FORMULAS:
+
+  Thermal Management:
+    # Vent area required for natural convection cooling
+    Q_W = P_dissipated                           # total power in watts to remove
+    T_rise_max = 20.0                            # °C max chassis temperature rise
+    A_vent = Q_W / (1.8 * T_rise_max)           # m²  — natural convection rule of thumb
+    # Convert to mm²: A_vent_mm2 = A_vent * 1e6
+    # Vent hole dia: 3-6mm; area fraction ≤ 25% of panel face (EMC)
+    vent_hole_dia = 4.0                          # mm — typical vent hole
+    vent_hole_count = int(A_vent_mm2 / (math.pi * (vent_hole_dia/2)**2))
+
+    # Heatsink fin sizing (forced air)
+    fin_h_max = math.sqrt(15 * fin_t) * 10      # mm — max fin height for H/t ≤ 15
+    fin_spacing_opt = 2 * math.sqrt(k_fin * fin_t / h_air)  # optimal spacing
+
+  EMC Shielding:
+    # Shielding effectiveness: SE ≥ 40 dB at 100MHz requires no aperture > 15mm
+    max_aperture = 15.0      # mm — longest dimension of any vent/slot/seam
+    wall_t_shield = 1.0      # mm — 1mm steel provides ~20dB SE at 100MHz (skin depth)
+
+  PCB Standoffs:
+    standoff_h = max(11.0, component_max_h + 2.0)  # 11mm clearance IPC-7711
+    standoff_dia = 6.0       # mm — M3 standoff OD
+    pcb_screw = 3.2          # mm — M3 clearance hole in PCB
+
+  Rack / Standard Mounting:
+    rack_u = 44.45           # mm — 1U height (19" rack standard EIA-310)
+    rack_w = 482.6           # mm — 19" full width  
+    panel_t = 1.5            # mm — steel panel (1U/2U server)
+
+GEOMETRY TECHNIQUES:
+  - Enclosure: box → shell(wall_t) → cut lid face → add lip/flange for sealing
+  - PCB standoff bosses: cylinder at each corner, union inside shell
+  - Vent pattern: rarray of cylinder cuts on side/top panel face
+  - DIN rail mount: T-profile cutout in enclosure bottom, or clip feature
+  - Connector cutout: rect() cuts in rear panel at standard interface positions
+  - Board-to-board connector access: rectangular slot at PCB edge
+
+STANDARDS:
+  PCB: 1.6mm thickness standard; M3 mounting holes at corners; edge clearance 3mm
+  IEC 60297: Sub-rack dimensions (3U, 6U, 9U Eurocard)
+  IP Rating: IP54 requires no aperture allowing 1mm wire entry
+  Wall thickness: 1.5mm steel, 2.5mm aluminium, 3.0mm ABS plastic (structural enclosures)
+  Colour: RAL 7035 light grey or RAL 9005 black for industrial enclosures

@@ -160,3 +160,45 @@ def execute_cadquery_safe(
             os.unlink(script_path)
         except Exception:
             pass
+
+
+def execute_cem_direct(
+    cem_class,
+    params,
+    job_id: str,
+    output_dir: Optional[str] = None,
+) -> dict:
+    """
+    Execute a Computational Engineering Model directly in-process.
+    Since CEMs are human-written, trusted code there is no need for subprocess sandboxing.
+    This is faster, simpler, and gives better error messages than the subprocess path.
+    Returns: {success, paths: {step, stl}, job_id, error?}
+    """
+    import traceback
+    import cadquery as cq
+
+    output_dir = output_dir or settings.output_dir
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    try:
+        instance = cem_class(params)
+        result = instance.build()
+
+        paths: dict[str, str] = {}
+
+        step_path = os.path.join(output_dir, f"{job_id}.step")
+        cq.exporters.export(result, step_path, cq.exporters.ExportTypes.STEP)
+        paths["step"] = step_path
+
+        stl_path = os.path.join(output_dir, f"{job_id}.stl")
+        cq.exporters.export(result, stl_path, cq.exporters.ExportTypes.STL)
+        paths["stl"] = stl_path
+
+        return {"success": True, "paths": paths, "job_id": job_id}
+
+    except Exception:
+        return {
+            "success": False,
+            "error": traceback.format_exc(),
+            "job_id": job_id,
+        }

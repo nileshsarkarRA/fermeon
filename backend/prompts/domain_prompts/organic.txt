@@ -1,7 +1,61 @@
-ORGANIC / GENERATIVE / COMPUTATIONAL DESIGN SKILL GUIDE:
-Focus on fluid, topology-optimized, Cadam, LEAP 71 style generative geometries.
-- AESTHETICS OVER BLOCKINESS: The object MUST NOT look like primitive blocks or cylinders merely unioned together. It must look grown, computed, or sculpted. 
-- BLENDING & FILLETING: Every visible sharp convex and concave edge must be aggressively filleted to create extreme continuous curvature. Use `.edges().fillet(large_radius)` where mathematically safe to completely wash away strict corners.
-- ADVANCED SHAPING: Rely heavily on `.spline()`, `.loft()`, and `.sweep()` rather than simple boxes and cylinders. If you must use primitives, aggressively chamfer/fillet the boolean intersections.
-- SKELETAL STRUCTURES: If designing "bone-like" or "generative" structures, consider using Voronoi-like patterns, sweeping circles along splines for struts, or hollowing out solid bodies and leaving thick organic ribs. 
-- AVOID 90-DEGREE ANGLES: Organic design abhors a straight line. Angle your extrusions, or taper parts using `draftAngle` in `.extrude(length, draftAngle)`.
+ORGANIC / GENERATIVE / COMPUTATIONAL DESIGN — LEAP 71 / NOYRON STYLE:
+
+Philosophy: You are not drawing a shape — you are writing code that GROWS a shape.
+Every curve must be algorithmically derived. No primitive blocks. No 90-degree anywhere visible.
+Think: Noyron generates rocket engines where every surface is functionally necessary.
+Apply the same rigour to organic / artistic forms: every curve has a mathematical reason.
+
+CORE TECHNIQUES:
+
+1. Spine-swept struts (ShapeKernel LatticePipe equivalent in CadQuery):
+   spine_pts = [(0,0,0), (r*sin(a), r*cos(a), h) for varying a and h]  # helical strut
+   strut = cq.Workplane("XY").circle(strut_r).sweep(cq.Workplane("XZ").spline(spine_pts))
+
+2. Revolve with spline profile (modulated radius):
+   profile_pts = [(0,base_r), (h/4, waist_r), (h/2, mid_r), (3*h/4, neck_r), (h, 0)]
+   result = cq.Workplane("XZ").spline(profile_pts).close().revolve(360, (0,0,0), (0,1,0))
+
+3. Loft with twist (Noyron modulation across length):
+   Use multiple workplane offsets each with a rotated polygon to create helical twist
+
+4. Shell + rib network (Noyron hollow structural skin):
+   outer = solid revolve/loft → shell(wall_t) → add internal spline-swept ribs
+
+5. PicoGK-inspired parametric modulation (map to CadQuery):
+   # Noyron uses implicit/VDB geometry for complex blending;
+   # In CadQuery, approximate this with multi-profile lofts:
+   profiles = []
+   for i, t in enumerate([0.0, 0.25, 0.5, 0.75, 1.0]):
+       r = base_r * (1 + amplitude * math.sin(freq * math.pi * t))  # sinusoidal modulation
+       profiles.append(cq.Workplane("XY").workplane(offset=t * total_h).circle(r))
+   # sweep/loft gives a modulated organic tube
+
+6. Fibonacci / Golden Ratio spirals:
+   phi = (1 + math.sqrt(5)) / 2     # golden ratio φ = 1.618
+   # Use for branching point placement, petal spacing, shell curvature
+   theta = 2 * math.pi * (1 - 1/phi)  # golden angle = 137.5°
+   spiral_pts = [(r*math.cos(i*theta), r*math.sin(i*theta), i*pitch) for i in range(n)]
+
+RULES:
+- NEVER use extrude() as primary shaping tool for organic forms — use revolve, sweep, loft
+- Spline control points must follow a mathematical law (sine, golden ratio, Fibonacci, catenary)
+- If using primitives, every face must be blended into adjacent faces with large fillets
+- Hollow thin-skin bodies: wall_t ≥ 2mm, ribs at 45-60° intervals for stiffening
+- Draft angles: all vertical faces ≥ 2° for AM powder escape and mouldability
+- Target: zero flat faces (everything curved), zero visible sharp edges
+- Avoid `.fillet()` on final union (BRep crash risk) — build curves INTO profiles instead
+
+MATHEMATICAL SPINE PATTERNS (encode these in code):
+  # Helix spine:
+  helix_pts = [(R*math.cos(t), R*math.sin(t), pitch*t/(2*math.pi))
+               for t in [i*2*math.pi/n for i in range(n_turns*n)]]
+  # Catenary (hanging chain) profile:
+  catenary_y = a * math.cosh(x / a)    # a = catenary parameter
+  # Sinusoidal thickness modulation:
+  r_at_z = r_base + amplitude * math.sin(freq * 2*math.pi * z / total_h)
+  # Power law taper:
+  r_at_z = r_root * (1 - (z / total_h)) ** exponent  # exponent=0.5 → root-like taper
+
+VALIDATION:
+  assert wall_t >= 2.0, "Min 2mm wall for AM organic forms"
+  assert all(abs(pt[0]) < 1000 for pt in spine_pts), "Spine out of bounds"

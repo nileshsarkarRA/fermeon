@@ -4,7 +4,10 @@ Extracts Python/CadQuery code from LLM responses regardless of formatting.
 Models wrap code in wildly different ways — this handles all of them.
 """
 
+import ast
+import ast
 import re
+import json
 from typing import Optional
 
 
@@ -87,17 +90,70 @@ def extract_params_from_response(raw_response: str) -> Optional[dict]:
     Try to extract a params dict from an intent-extraction response.
     Returns None if no structured params found.
     """
-    try:
-        import json
-        # Look for JSON block
-        json_block = re.search(r'```json\s*(.*?)```', raw_response, re.DOTALL)
-        if json_block:
-            return json.loads(json_block.group(1).strip())
+    return extract_json_params(raw_response)
 
-        # Look for bare JSON object
-        obj_match = re.search(r'\{[^{}]*\}', raw_response, re.DOTALL)
-        if obj_match:
-            return json.loads(obj_match.group(0))
-    except Exception:
-        pass
+
+def extract_json_params(raw_response: str) -> Optional[dict]:
+    """
+    Robustly extract the first JSON object from an LLM response.
+    Uses brace-matching to correctly handle nested JSON structures.
+    Strips DeepSeek <think> blocks and markdown fences before parsing.
+    """
+    if not raw_response or not raw_response.strip():
+        return None
+
+    # Strip reasoning model <think> blocks
+    cleaned = re.sub(r'<think>.*?</think>', '', raw_response, flags=re.DOTALL).strip()
+
+    # Try ```json ... ``` block first
+    json_fence = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
+    if json_fence:
+        try:
+            return json.loads(json_fence.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Brace-matching: find the outermost { ... } and parse it
+    start = cleaned.find('{')
+    if start < 0:
+        return None
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i, ch in enumerate(cleaned[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(cleaned[start:i + 1])
+                except json.JSONDecodeError:
+                    return None
     return None
+
+
+def validate_python_syntax(code: str) -> tuple[bool, str]:
+    """
+    Check whether a code string is valid Python using the AST parser.
+    Returns (True, "") on success, (False, error_description) on failure.
+    """
+    try:
+        ast.parse(code)
+        return True, ""
+    except SyntaxError as exc:
+        return False, f"line {exc.lineno}: {exc.msg}"
+    except Exception as exc:
+        return False, str(exc)

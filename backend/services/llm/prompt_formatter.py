@@ -102,6 +102,59 @@ def _gemini_safety_sanitize(text: str) -> str:
     return text
 
 
+def format_cem_prompt_for_model(
+    model: str,
+    cem_name: str,
+    schema_json: str,
+    user_prompt: str,
+    model_config: dict,
+) -> list[dict]:
+    """
+    Format the CEM parameter-extraction request for the given model family.
+    The LLM's only job: read schema + user description, output a JSON object.
+    """
+    cem_system_path = PROMPTS_DIR / "cem_extractor_prompt.txt"
+    if cem_system_path.exists():
+        template = cem_system_path.read_text(encoding="utf-8")
+        system_prompt = (
+            template
+            .replace("{cem_name}", cem_name)
+            .replace("{schema}", schema_json)
+        )
+    else:
+        system_prompt = (
+            f"You are a precision engineering parameter extractor.\n"
+            f"Output ONLY a JSON object with parameters for a {cem_name}.\n"
+            f"Schema: {schema_json}\n"
+            f"Rules: output ONLY valid JSON, no markdown, no explanations."
+        )
+
+    user_content = (
+        f'User description: "{user_prompt}"\n\n'
+        f"Extract the engineering parameters as a single JSON object:"
+    )
+
+    provider = model_config.get("provider", "unknown")
+
+    if provider == "ollama":
+        return [{"role": "user", "content": f"[SYSTEM]\n{system_prompt}\n[/SYSTEM]\n\n{user_content}"}]
+
+    reasoning_keys = ["deepseek-r1", "o1", "o3", "o1-mini", "o3-mini"]
+    if any(rm in model.lower() for rm in reasoning_keys):
+        return [{"role": "user", "content": f"Instructions:\n{system_prompt}\n\n{user_content}"}]
+
+    if provider == "google":
+        return [
+            {"role": "system", "content": _gemini_safety_sanitize(system_prompt)},
+            {"role": "user", "content": user_content},
+        ]
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+
 def build_correction_prompt(
     original_prompt: str,
     failed_code: str,

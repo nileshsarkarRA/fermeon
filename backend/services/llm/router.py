@@ -29,7 +29,7 @@ def get_best_available_model(preferred: Optional[str] = None) -> str:
     return DEFAULT_MODEL
 
 
-def is_model_available(model_id: str, user_api_key: Optional[str] = None) -> tuple[bool, Optional[str]]:
+def is_model_available(model_id: str, user_api_key: Optional[str] = None) -> Tuple[bool, Optional[str]]:
     """
     Check if a model can be used.
     Returns (is_available, reason_if_not)

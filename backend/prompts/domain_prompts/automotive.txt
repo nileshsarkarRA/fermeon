@@ -1,0 +1,46 @@
+AUTOMOTIVE ENGINEERING DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Automotive parts carry dynamic loads with strict weight constraints.
+All dimensions derive from load cycles, crash requirements, or packaging envelopes.
+
+KEY PHYSICS FORMULAS:
+
+  Suspension / Chassis:
+    # Control arm: bending stress from wheel load
+    arm_t = math.sqrt(6 * F_wheel * arm_L / (sigma_fatigue * arm_w))   # plate thickness
+    sigma_fatigue = 0.4 * sigma_UTS     # fatigue limit ~40% UTS for steel
+    # Tube wall thickness: torsion + bending
+    tube_wall = max(tube_od / 20.0, 2.0)          # structural tube: OD/20 minimum
+
+  Brake / Caliper:
+    # Clamping force from hydraulic pressure
+    F_clamp = P_hyd_MPa * math.pi * (piston_dia/2)**2   # N per piston
+    rotor_t_min = F_clamp * mu / (sigma_shear * rotor_area_factor)  # shear at pad
+
+  Gear / Drivetrain:
+    # Helical gear: face width = 8-16 × module (wider for smoother mesh)
+    face_w = 12 * module_gear               # face width (mid range)
+    pitch_dia = module_gear * teeth
+    # Differential crown wheel: pitch_dia ≈ 250-400mm, tooth count 40-50
+
+  Exhaust / Intake:
+    # Pipe sizing from engine displacement
+    exhaust_od = 25.4 * math.sqrt(engine_cc / 1600.0)   # mm rule of thumb
+    # Velocity in exhaust: 50-80 m/s at peak
+    intake_area = engine_cc * 1e-6 * n_rpm / 60 / 2 / v_intake  # 4-stroke: divide by 2
+
+GEOMETRY TECHNIQUES:
+  - A-pillar / roll cage: sweep circular/square tube profiles along 3D spline paths
+    tube = cq.Workplane("XY").circle(od/2).sweep(cq.Workplane("XZ").spline(pillar_pts))
+  - Chassis rail: box profile swept along vehicle centerline with U-channel cutout
+  - Wheel hub: central cylinder + disc flange + bolt circle via pushPoints
+  - Exhaust manifold: individual pipe sweeps unioned into collector cone
+  - Engine block: complex box solid with cylinder bores as array of cq.Workplane holes
+  - Body panel: thin shell (1-3mm) from revolve or loft, then shell()
+
+STANDARDS:
+  Bolt circles: M12 × pitch circle for wheels (standard 4×100, 5×114.3, 5×120)
+  Thread engagement: min 1.5 × bolt_dia in aluminium, 1.0 × in steel
+  Tube OD series: 25.4, 31.75, 38.1, 44.45, 50.8mm (inch-derived standard)
+  Sheet panel: 0.7mm (outer), 1.0mm (inner), 1.5mm (structural)
+  Casting wall: min 3mm (aluminium), 4mm (iron) — avoid blind pockets

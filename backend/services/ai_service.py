@@ -87,6 +87,15 @@ def extract_intent(prompt: str, model: str = None) -> dict:
         "desk": "furniture",
         "sofa": "furniture",
         "furniture": "furniture",
+        # Consumer electronics
+        "ipod": "handheld_device",
+        "iphone": "handheld_device",
+        "phone": "handheld_device",
+        "smartphone": "handheld_device",
+        "tablet": "handheld_device",
+        "ipad": "handheld_device",
+        "phablet": "handheld_device",
+        "handheld": "handheld_device",
     }
     for keyword, ptype in part_map.items():
         if keyword in prompt_lower:
@@ -99,6 +108,7 @@ def extract_intent(prompt: str, model: str = None) -> dict:
         "aerospace": ["aircraft", "aerospace", "fuselage", "wing", "rocket", "thrust", "nozzle"],
         "architecture": ["building", "column", "beam", "slab", "floor", "wall", "architectural", "castle", "house", "fort", "bridge"],
         "biomedical": ["implant", "prosthetic", "bone", "surgical", "medical", "orthopedic"],
+        "consumer_electronics": ["ipod", "iphone", "phone", "smartphone", "tablet", "ipad", "handheld", "device", "gadget", "electronics"],
         "furniture": ["chair", "table", "desk", "seat", "sofa", "bed", "furniture", "cabinet", "shelf", "armrest"],
         "organic": ["organic", "generative", "leap 71", "cadam", "formless", "topology", "smooth", "fluid", "sculpted"],
         "mechanical": [],  # Default

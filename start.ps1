@@ -1,8 +1,9 @@
 <#
 .SYNOPSIS
-    Starts the Fermeon AI CAD Generator backend and frontend.
+    Starts the Fermeon AI CAD Generator.
 .DESCRIPTION
-    Installs dependencies and launches the FastAPI server and Next.js frontend in separate windows.
+    Installs backend dependencies and launches the FastAPI server.
+    The frontend is static HTML/JS served directly by FastAPI — no Node.js required.
 #>
 
 $ErrorActionPreference = "Stop"
@@ -19,18 +20,18 @@ Write-Host ""
 
 
 try {
-    $null = Get-Command python -ErrorAction Stop
+    $null = py -3.12 --version 2>&1
+    if ($LASTEXITCODE -ne 0) { throw }
 }
 catch {
-    Write-Error "[ERROR] Python not found. Please install Python 3.11+ from https://python.org"
+    Write-Error "[ERROR] Python 3.12 not found. Please install it from https://python.org"
     Exit 1
 }
 
 # ── Setup Backend ───────────────────────────────────────────────────────────
-Write-Host "[1/4] Installing backend dependencies..." -ForegroundColor Yellow
+Write-Host "[1/2] Installing backend dependencies..." -ForegroundColor Yellow
 Push-Location backend
-# Using cmd to pipe output correctly and wait
-cmd /c "python -m pip install -r requirements.txt -q"
+py -3.12 -m pip install -r requirements.txt -q
 if ($LASTEXITCODE -ne 0) {
     Write-Error "[ERROR] Failed to install backend dependencies."
     Exit 1
@@ -43,9 +44,9 @@ Write-Host "      Done." -ForegroundColor Green
 
 
 
-# ── Launch Servers ──────────────────────────────────────────────────────────
-Write-Host "[3/4] Starting Fermeon backend on http://localhost:8000 ..." -ForegroundColor Yellow
-Start-Process cmd -ArgumentList "/k", "title Fermeon Backend && cd backend && python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0"
+# ── Launch Backend ──────────────────────────────────────────────────────────────────
+Write-Host "[2/2] Starting Fermeon on http://localhost:8000 ..." -ForegroundColor Yellow
+Start-Process cmd -ArgumentList "/k", "title Fermeon && set PYTHONUNBUFFERED=1 && cd backend && py -3.12 -m uvicorn main:app --reload --port 8000 --host 0.0.0.0"
 
 Start-Sleep -Seconds 3
 

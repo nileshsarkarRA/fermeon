@@ -1,0 +1,52 @@
+MARINE ENGINEERING DOMAIN — COMPUTATIONAL ENGINEERING GUIDE:
+
+Philosophy: Marine parts operate in a corrosive, high-pressure, dynamic buoyancy environment.
+Every submerged hull surface experiences hydrostatic pressure: P = rho * g * h.
+All structural geometry derives from displacement, waterplane area, and wave loads.
+
+KEY PHYSICS FORMULAS:
+
+  Hydrostatics / Buoyancy:
+    # Displacement (Archimedes): buoyancy = rho_water * g * V_submerged
+    rho_seawater = 1025.0      # kg/m³
+    draft_m = displacement_kg / (rho_seawater * waterplane_area_m2)  # approx for box hull
+    # Block coefficient Cb = V_displaced / (L * B * T)  [0.4 hulls to 0.85 tankers]
+    hull_vol = Cb * hull_L * hull_B * draft_m
+
+  Hull Shell Plating (ABS Rules):
+    # Shell plate thickness from bending between frames
+    # Simplified: t = 0.7 * s * sqrt(P_kPa / sigma_allow_MPa)
+    # s = frame spacing (mm), P_kPa = hydrostatic pressure at keel
+    P_keel_kPa = rho_seawater * 9.81 * draft_m / 1000.0   # kPa
+    s_frame = hull_L / 10.0          # frame spacing ≈ L/10
+    shell_t = max(0.7 * s_frame * math.sqrt(P_keel_kPa / 235.0), 4.0)  # min 4mm
+
+  Propeller:
+    # Diameter from power and RPM (Wageningen B-series approximation)
+    prop_dia = 0.95 * (shaft_power_kW / rpm)**(1/3) * 1000  # rough sizing mm
+    # Blade pitch: P/D = 0.8-1.2 for conventional propellers
+    blade_pitch = prop_dia * 1.0
+
+  Keel / Stability:
+    righting_arm = GM * sin_heel               # GZ curve basis
+    ballast_mass = displacement * 0.35         # typical: 30-40% of displacement in ballast
+    keel_l = hull_L * 0.4                      # fin keel length ≈ 40% hull waterline
+
+GEOMETRY TECHNIQUES:
+  - Hull: revolve or loft hull sections; use ellipse-based waterplane sections
+    midship_section = cq.Workplane("XY").ellipse(hull_B/2, draft_m * 1000 * Cb)
+    bow_section = cq.Workplane("XY").workplane(offset=hull_L*1000).circle(stem_r)
+    hull_outer = cq.Workplane("XY").loft([midship_section.vals()[0], bow_section.vals()[0]])
+  - Propeller blade: spline profile swept along helical spine
+    spine = cq.Workplane("XZ").spline([(0,0,0), ...])  # helical arc at pitch angle
+    blade = cq.Workplane("XY").spline(aerofoil_pts).close().sweep(spine)
+  - Keel fin: wedge() profile thicker at root (structural) tapering to thin trailing edge
+  - Through-hull fitting: cylinder with flange, union to shell plate face
+  - Rudder: lofted aerofoil section (NACA 0015 profile) with stock bore through centre
+
+STANDARDS:
+  Classification: ABS, Lloyd's, DNV material and scantling rules
+  Fasteners: A4-316 stainless steel for external, hot-dip galvanised internal
+  Sacrificial anodes: Zinc anode OD = shaft_dia * 3, length = shaft_dia * 4
+  Shaft seal: lip seal clearance 0.1mm on shaft, housing bore = seal_OD + 0.02mm
+  Seacock bore: same DN as pipe; valve body OD = pipe_od * 2.5

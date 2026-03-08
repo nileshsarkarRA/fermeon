@@ -22,12 +22,13 @@ echo.
 timeout /t 2 /nobreak >nul
 
 REM ── Check Python ──────────────────────────────────────────────────
-python --version >nul 2>&1
+py -3.12 --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Python not found.
-    echo         Install Python 3.8+ from https://python.org
+    echo [ERROR] Python 3.12 not found.
+    echo         Install Python 3.12 from https://python.org
     pause & exit /b 1
 )
+set PYTHON=py -3.12
 
 
 
@@ -52,7 +53,7 @@ if %errorlevel% equ 0 (
 REM ── Install backend dependencies ──────────────────────────────────
 echo [1/4] Checking backend dependencies...
 cd backend
-python -m pip install -r requirements.txt -q
+%PYTHON% -m pip install -r requirements.txt -q
 if %errorlevel% neq 0 (
     echo [ERROR] Backend pip install failed.
     pause & exit /b 1
@@ -66,8 +67,8 @@ REM ── Install frontend dependencies ─────────────
 
 
 REM ── Start backend ─────────────────────────────────────────────────
-echo [3/4] Starting backend on http://localhost:8000 ...
-start "Fermeon Backend" cmd /k "title Fermeon Backend && cd backend && python -m uvicorn main:app --port 8000 --host 0.0.0.0"
+echo [2/3] Starting backend on http://localhost:8000 ...
+start "Fermeon" cmd /k "title Fermeon && set PYTHONUNBUFFERED=1 && cd backend && py -3.12 -m uvicorn main:app --reload --port 8000 --host 0.0.0.0"
 
 
 

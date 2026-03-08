@@ -5,12 +5,18 @@ Fermeon — FastAPI Application Entry Point
 import os
 import subprocess
 import time
+import logging
+
+# Suppress annoying LiteLLM startup/debug messages globally before imports
+os.environ["LITELLM_LOG"] = "ERROR"
+os.environ["SUPPRESS_LITELLM_LOGS"] = "True"
+logging.getLogger("LiteLLM").setLevel(logging.ERROR)
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from routers import generate, models, export, gpu
+from routers import generate, models, export, gpu, logs
 from config.settings import settings
 
 
@@ -85,12 +91,18 @@ app.include_router(generate.router, prefix="/api", tags=["Generate"])
 app.include_router(models.router, prefix="/api", tags=["Models"])
 app.include_router(export.router, prefix="/api", tags=["Export"])
 app.include_router(gpu.router, prefix="/api", tags=["GPU"])
+app.include_router(logs.router, prefix="/api", tags=["Logs"])
 
 # Mount endpoints for static files
 # 1. Output CAD files (STL, STEP)
 app.mount("/files", StaticFiles(directory=settings.output_dir), name="files")
 
-# 2. Serve the simple HTML frontend at rural root
+# 2. Brand assets (logos, favicon)
+assets_dir = Path(__file__).parent.parent / "assets"
+if assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+# 3. Serve the simple HTML frontend at root (MUST be last — catches all unmatched paths)
 frontend_dir = Path(__file__).parent.parent / "frontend"
 app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
 
