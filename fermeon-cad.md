@@ -46,15 +46,15 @@ User Prompt
 
 | Layer | Choice | Why |
 |---|---|---|
-| Frontend | Next.js 14 + React + TypeScript | Same as before |
+| Frontend | Vanilla HTML/JS | No-build, lightweight, blazing fast |
 | Backend | FastAPI (Python) | Python-native CAD libs |
 | LLM Gateway | **LiteLLM** | Unified API for 100+ models |
 | Local LLMs | **Ollama** | Run any open model locally |
 | CAD Engine | CadQuery | Parametric geometry |
 | 3D Viewer | Three.js / @react-three/fiber | Browser 3D |
 | Storage | Supabase + S3 | Metadata + files |
-| Auth | Clerk.dev | Easiest Next.js auth |
-| Deployment | Vercel (frontend) + Railway (backend) | |
+| Auth | Local Storage | Fully local user API keys |
+| Deployment | Any Static Server (or native via FastAPI) | Simple architecture |
 
 ### Why LiteLLM?
 
@@ -242,37 +242,10 @@ DEFAULT_FALLBACK_CHAIN = [
 ai-cad-generator/
 │
 ├── frontend/
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   ├── generate/
-│   │   │   └── page.tsx               # Main generator UI
-│   │   ├── settings/
-│   │   │   └── page.tsx               # API key management + model selection
-│   │   └── api/
-│   │       ├── generate/route.ts
-│   │       └── models/route.ts        # List available models
-│   │
-│   ├── components/
-│   │   ├── cad/
-│   │   │   ├── ModelViewer.tsx        # Three.js 3D viewer
-│   │   │   ├── PromptInput.tsx
-│   │   │   ├── ParamPanel.tsx
-│   │   │   ├── ExportPanel.tsx
-│   │   │   └── CodePreview.tsx
-│   │   ├── llm/
-│   │   │   ├── ModelSelector.tsx      # Dropdown: pick any model
-│   │   │   ├── ModelBadge.tsx         # Shows: Local / API / Cost indicator
-│   │   │   ├── ApiKeyForm.tsx         # User enters their own keys
-│   │   │   └── ModelComparison.tsx    # Side-by-side output comparison
-│   │   └── layout/
-│   │       ├── Header.tsx
-│   │       └── Sidebar.tsx
-│   │
-│   └── lib/
-│       ├── api.ts
-│       ├── models.ts                  # Frontend model list + metadata
-│       └── types.ts
+│   ├── index.html                 # Main generator UI
+│   ├── styles.css                 # Sleek UI styling
+│   └── app.js                     # Logic and API calls
+│
 │
 ├── backend/
 │   ├── main.py

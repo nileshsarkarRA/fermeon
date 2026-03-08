@@ -7,7 +7,8 @@ Uses LiteLLM for unified API across 100+ models.
 from __future__ import annotations
 import os
 import litellm
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 from config.models import SUPPORTED_MODELS, DEFAULT_FALLBACK_CHAIN
 from .prompt_formatter import format_prompt_for_model, build_correction_prompt
 from .response_parser import extract_code_from_response
@@ -38,7 +39,13 @@ class LLMGateway:
 
     async def generate_cad_code(
         self,
-        request: GatewayRequest,
+        prompt: str,
+        model: str,
+        system_prompt: str,
+        examples: List[str],
+        user_api_key: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
     ) -> dict:
         """
         Core generation method. Works with any supported model.

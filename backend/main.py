@@ -3,6 +3,8 @@ Fermeon — FastAPI Application Entry Point
 """
 
 import os
+import subprocess
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,14 +14,49 @@ from routers import generate, models, export, gpu
 from config.settings import settings
 
 
+def _ensure_ollama_running() -> None:
+    """
+    Check if Ollama is already serving; if not, start it in the background.
+    Won't do anything if Ollama CLI is not installed.
+    """
+    try:
+        # Quick health check — Ollama exposes /api/version
+        import urllib.request
+        req = urllib.request.Request(
+            "http://localhost:11434/api/version",
+            headers={"User-Agent": "fermeon-health"},
+        )
+        urllib.request.urlopen(req, timeout=2)
+        print("   Ollama already running ✔")
+        return
+    except Exception:
+        pass  # Not running yet — try to start it
+
+    # Try to start ollama serve
+    try:
+        subprocess.Popen(
+            ["ollama", "serve"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        time.sleep(2)  # Give it a moment to boot
+        print("   Ollama started automatically ✔")
+    except FileNotFoundError:
+        print("   Ollama not installed — local inference unavailable")
+    except Exception as e:
+        print(f"   Could not start Ollama: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create output directory on startup."""
+    """Create output directory and ensure Ollama is running on startup."""
     output_dir = Path(settings.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"✅ Fermeon backend running — output dir: {output_dir.resolve()}")
     print(f"   Default model: {settings.default_model}")
     print(f"   Ollama URL: {settings.ollama_base_url}")
+    _ensure_ollama_running()
     yield
 
 
@@ -49,6 +86,14 @@ app.include_router(models.router, prefix="/api", tags=["Models"])
 app.include_router(export.router, prefix="/api", tags=["Export"])
 app.include_router(gpu.router, prefix="/api", tags=["GPU"])
 
+# Mount endpoints for static files
+# 1. Output CAD files (STL, STEP)
+app.mount("/files", StaticFiles(directory=settings.output_dir), name="files")
+
+# 2. Serve the simple HTML frontend at rural root
+frontend_dir = Path(__file__).parent.parent / "frontend"
+app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+
 
 @app.get("/health")
 async def health():
@@ -56,14 +101,4 @@ async def health():
         "status": "ok",
         "app": "Fermeon",
         "version": "1.0.0",
-    }
-
-
-@app.get("/")
-async def root():
-    return {
-        "message": "Fermeon API — AI Multi-LLM CAD Generator",
-        "docs": "/docs",
-        "health": "/health",
-        "models": "/api/models",
     }

@@ -10,19 +10,19 @@ Fermeon is a multi-LLM application that transforms natural language prompts into
 *   **Interactive 3D Preview:** Live, glassmorphic WebGL model viewer utilizing `three.js`.
 
 ## ⚙️ Quick Start
-We recommend using the provided launcher to start both the Python backend and Next.js frontend automatically.
+We recommend using the provided launcher to start the Python backend automatically.
 
 1.  Clone this repository.
-2.  Install Python 3.11+ and Node.js.
-3.  Double click `start.bat`.
+2.  Install Python 3.11+.
+3.  Double click `start.bat` (Windows) or `./start.ps1`.
 
-The launcher will verify prerequisites, install pip/npm dependencies, start both servers, auto-start Ollama (if installed locally), and launch the interface in your default browser.
+The launcher will verify prerequisites, install pip dependencies, start the FastAPI server, auto-start Ollama (if installed locally), and launch the interface in your default browser at http://localhost:8000.
 
 To use the local CLI fallback:
 Run `fermeon.bat` in the root folder to access the lightweight terminal prompt.
 
 ## 💻 Tech Stack
-*   **Frontend:** Next.js, React, Tailwind CSS, Three.js (React Three Fiber)
+*   **Frontend:** Vanilla HTML/CSS/JS (Lightweight, blazingly fast, no build step required)
 *   **Backend:** FastAPI, Python, CadQuery, LiteLLM
 *   **Local AI Engine:** Ollama (qwen2.5-coder:14b parameter size highly recommended)
 

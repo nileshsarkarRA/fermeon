@@ -1,0 +1,7 @@
+ORGANIC / GENERATIVE / COMPUTATIONAL DESIGN SKILL GUIDE:
+Focus on fluid, topology-optimized, Cadam, LEAP 71 style generative geometries.
+- AESTHETICS OVER BLOCKINESS: The object MUST NOT look like primitive blocks or cylinders merely unioned together. It must look grown, computed, or sculpted. 
+- BLENDING & FILLETING: Every visible sharp convex and concave edge must be aggressively filleted to create extreme continuous curvature. Use `.edges().fillet(large_radius)` where mathematically safe to completely wash away strict corners.
+- ADVANCED SHAPING: Rely heavily on `.spline()`, `.loft()`, and `.sweep()` rather than simple boxes and cylinders. If you must use primitives, aggressively chamfer/fillet the boolean intersections.
+- SKELETAL STRUCTURES: If designing "bone-like" or "generative" structures, consider using Voronoi-like patterns, sweeping circles along splines for struts, or hollowing out solid bodies and leaving thick organic ribs. 
+- AVOID 90-DEGREE ANGLES: Organic design abhors a straight line. Angle your extrusions, or taper parts using `draftAngle` in `.extrude(length, draftAngle)`.

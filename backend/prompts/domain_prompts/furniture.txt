@@ -1,0 +1,7 @@
+FURNITURE DOMAIN SKILL GUIDE:
+Focus on physical stability, ergonomic proportions, modern aesthetics, and symmetric assembly.
+- CRITICAL PROPORTIONS: Distinguish carefully between 'elevation' and 'thickness'. For example, `seat_height` means the distance from the floor to the seat (~450mm). `seat_thickness` is the mass of the seat plate itself (~20-40mm). Do NOT extrude a seat 450mm thick into a giant block!
+- AESTHETICS (SMOOTH EDGES): Furniture should look modern and comfortable, not blocky. You MUST apply fillets or chamfers to user-facing edges. For instance, `seat.edges("|Z").fillet(10)` or `.edges(">Z").fillet(5)` to soften the top perimeter.
+- Z-AXIS ORIENTATION: Standardize your builds. Z=0 is the floor. Legs extend from `Z=0` up to `Z=seat_height - seat_thickness`. The seat rests on top of the legs. The backrest extends upwards from the seat.
+- Symmetric repetition: For legs and armrests, define the core logic once. Use transformations or offsets accurately to place the 4 legs at the corners of the base structure (e.g., `seat_width / 2`, `-seat_depth / 2`).
+- Combination: Define the `seat`, `backrest`, `legs`, and `arms` as cleanly separated CadQuery variables and combine them at the end into `result` using `.union()`.

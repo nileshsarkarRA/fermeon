@@ -1,0 +1,6 @@
+ARCHITECTURE DOMAIN SKILL GUIDE:
+Focus on structural composition, modular assemblies, and realistic architectural proportions.
+- Build from the ground up: Define a clear base or foundation Workplane first.
+- Modularity: For complex structures like castles or houses, distinct components (e.g., `base_plate`, `main_keep`, `left_tower`, `right_tower`, `roof`) must be modeled as separate variables first.
+- Assembly: Combine the modular parts into the final `result` using sequential `.union()` operations. Ensure transformations (`.translate()`) correctly align parts flush on the floor/base without floating.
+- Safety: Avoid unnecessary mechanical details (small chamfers, threads, M3 holes) on architectural objects. Focus on bulk massing, walls, and prominent features (e.g., crenellations, pillars, arches).

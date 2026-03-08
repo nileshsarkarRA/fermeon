@@ -16,17 +16,12 @@ Write-Host "  ===============================================================" -
 Write-Host ""
 
 
-# ── Check Prerequisites ─────────────────────────────────────────────────────
-try {
-    $null = Get-Command node -ErrorAction Stop
-} catch {
-    Write-Error "[ERROR] Node.js not found. Please install from https://nodejs.org"
-    Exit 1
-}
+
 
 try {
     $null = Get-Command python -ErrorAction Stop
-} catch {
+}
+catch {
     Write-Error "[ERROR] Python not found. Please install Python 3.11+ from https://python.org"
     Exit 1
 }
@@ -46,16 +41,7 @@ if (!(Test-Path "outputs")) {
 Pop-Location
 Write-Host "      Done." -ForegroundColor Green
 
-# ── Setup Frontend ──────────────────────────────────────────────────────────
-Write-Host "[2/4] Installing frontend dependencies..." -ForegroundColor Yellow
-Push-Location frontend
-cmd /c "npm install --silent"
-if ($LASTEXITCODE -ne 0) {
-    Write-Error "[ERROR] Failed to install frontend dependencies."
-    Exit 1
-}
-Pop-Location
-Write-Host "      Done." -ForegroundColor Green
+
 
 # ── Launch Servers ──────────────────────────────────────────────────────────
 Write-Host "[3/4] Starting Fermeon backend on http://localhost:8000 ..." -ForegroundColor Yellow
@@ -63,21 +49,18 @@ Start-Process cmd -ArgumentList "/k", "title Fermeon Backend && cd backend && py
 
 Start-Sleep -Seconds 3
 
-Write-Host "[4/4] Starting Fermeon frontend on http://localhost:3000 ..." -ForegroundColor Yellow
-Start-Process cmd -ArgumentList "/k", "title Fermeon Frontend && cd frontend && npm run dev"
 
-Start-Sleep -Seconds 4
 
 # ── Open Browser ────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  ✓ Fermeon is starting up!" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Frontend: http://localhost:3000"
+Write-Host "  App:      http://localhost:8000"
 Write-Host "  Backend:  http://localhost:8000"
 Write-Host "  API Docs: http://localhost:8000/docs"
 Write-Host ""
 Write-Host "  Opening browser..." -ForegroundColor Yellow
-Start-Process "http://localhost:3000/generate"
+Start-Process "http://localhost:8000/"
 
 Write-Host ""
 Write-Host "  Press any key to exit this launcher (servers keep running in their own windows)..."

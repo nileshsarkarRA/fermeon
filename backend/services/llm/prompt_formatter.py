@@ -6,7 +6,7 @@ reasoning model handling, Ollama embedded prompts.
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
@@ -16,9 +16,9 @@ def format_prompt_for_model(
     model: str,
     system_prompt: str,
     user_prompt: str,
-    examples: list[str],
+    examples: List[str],
     model_config: dict,
-) -> list[dict]:
+) -> List[dict]:
     """
     Returns messages array formatted correctly for each model family.
 
@@ -125,9 +125,11 @@ Fix the error. Return ONLY the corrected complete Python code block.
 Do not explain. Just the fixed code.
 
 Common CadQuery fixes:
+- BRep_API command not done: This usually means a fillet or boolean union failed due to complex geometry. Completely REMOVE all `.fillet()` and `.chamfer()` calls from your code and try again.
 - Fillet too large: reduce fillet radius (must be < half the smallest edge length)
 - Non-manifold geometry: ensure all solids are closed before boolean operations
 - Zero-length edge: check all extrude/revolve distances are > 0
+- Cannot union type NoneType: NEVER call `.union()`, `.cut()`, or `.intersect()` without an argument. ALWAYS specify the object to union with, e.g., `partA.union(partB)`.
 - Thread failure: use valid pitch values (e.g., pitch=1.25 for M8)
 - Missing show_object(): always end with show_object(result) or result = ...
 

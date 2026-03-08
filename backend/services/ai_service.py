@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
@@ -33,7 +33,7 @@ def build_system_prompt(domain: str = "mechanical") -> str:
     return f"{base_prompt}{domain_context}"
 
 
-def load_examples(part_type: str = "generic") -> list[str]:
+def load_examples(part_type: str = "generic") -> List[str]:
     """
     Load few-shot CadQuery examples for the given part type.
     Falls back to generic examples if no specific ones found.
@@ -82,6 +82,11 @@ def extract_intent(prompt: str, model: str = None) -> dict:
         "flange": "flange",
         "spring": "spring",
         "bearing": "bearing",
+        "chair": "furniture",
+        "table": "furniture",
+        "desk": "furniture",
+        "sofa": "furniture",
+        "furniture": "furniture",
     }
     for keyword, ptype in part_map.items():
         if keyword in prompt_lower:
@@ -92,8 +97,10 @@ def extract_intent(prompt: str, model: str = None) -> dict:
     domain = "mechanical"
     domain_map = {
         "aerospace": ["aircraft", "aerospace", "fuselage", "wing", "rocket", "thrust", "nozzle"],
-        "architecture": ["building", "column", "beam", "slab", "floor", "wall", "architectural"],
+        "architecture": ["building", "column", "beam", "slab", "floor", "wall", "architectural", "castle", "house", "fort", "bridge"],
         "biomedical": ["implant", "prosthetic", "bone", "surgical", "medical", "orthopedic"],
+        "furniture": ["chair", "table", "desk", "seat", "sofa", "bed", "furniture", "cabinet", "shelf", "armrest"],
+        "organic": ["organic", "generative", "leap 71", "cadam", "formless", "topology", "smooth", "fluid", "sculpted"],
         "mechanical": [],  # Default
     }
     for dom, keywords in domain_map.items():
@@ -126,8 +133,6 @@ def extract_intent(prompt: str, model: str = None) -> dict:
     ambiguities = []
     if "hole" in prompt_lower and "thread" not in prompt_lower:
         ambiguities.append("Hole threading not specified — assuming clearance hole")
-    if "fillet" not in prompt_lower and "chamfer" not in prompt_lower:
-        ambiguities.append("Edge treatment not specified — using small default fillets")
     if not dimensions:
         ambiguities.append("No dimensions specified — using standard proportions")
 

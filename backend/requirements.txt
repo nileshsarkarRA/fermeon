@@ -8,3 +8,4 @@ httpx
 trimesh
 numpy
 aiofiles
+cadquery
