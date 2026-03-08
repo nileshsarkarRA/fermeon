@@ -1,0 +1,6 @@
+MECHANICAL ENGINEERING DOMAIN SKILL GUIDE:
+Focus on structural integrity, proper tolerance assumptions, and standard hardware interfaces.
+- Use metric ISO standards for all bolt patterns and threads (e.g., M3, M4, M5 clearance holes).
+- Default to clearance holes when a screw or bolt is mentioned unless threading is explicitly requested.
+- When creating brackets or load-bearing plates, rely on generous fillets (~2mm+) on interior stress concentrations.
+- If part geometry requires ribs or gussets for stiffening, include them parametrically.

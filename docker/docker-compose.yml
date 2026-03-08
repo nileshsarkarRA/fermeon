@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - FRONTEND_URL=http://localhost:3000
+    volumes:
+      - ../backend/outputs:/app/outputs
+      - ../backend/.env:/app/.env
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+    depends_on:
+      - backend

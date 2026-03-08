@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+litellm>=1.50.0
+pydantic
+pydantic-settings
+python-dotenv
+httpx
+trimesh
+numpy
+aiofiles

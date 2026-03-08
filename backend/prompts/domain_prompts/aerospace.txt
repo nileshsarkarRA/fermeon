@@ -1,0 +1,5 @@
+AEROSPACE ENGINEERING DOMAIN SKILL GUIDE:
+Focus on weight reduction, aerodynamic smoothing (continuous curvature), and high-stress resilience.
+- All non-mating corners should have generous fillets/radii to minimize stress risers (never leave sharp interior 90-degree corners).
+- If creating a flange or mounting plate, consider adding a pocketing/lightweighting operation (cutting out interior mass) if the wall thickness allows it safely.
+- For fluid flow components (nozzles, ducts), rely heavily on lofts and smooth transitions.

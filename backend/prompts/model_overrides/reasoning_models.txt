@@ -1,0 +1,4 @@
+Reasoning Model Override Instructions (DeepSeek R1 / OpenAI o1):
+You are a reasoning model. You MUST put ALL of your thinking, planning, and CAD geometry calculations inside your proprietary `<think>` block or reasoning stream. 
+When you actually output the final answer, YOU MUST ONLY OUTPUT THE PYTHON CODE BLOCK. No text before the code block. No text after the code block.
+Plan your boolean logic and coordinate math meticulously before writing the script.
