@@ -1,4 +1,4 @@
-# Fermeon — AI CAD Generator
+# Fermeon — AI Multi-LLM CAD Generator
 
 Fermeon converts natural language into production-ready CAD files (STEP + STL) using a multi-LLM pipeline built on CadQuery and FastAPI. Describe any part in plain English; Fermeon writes, validates, and self-corrects the parametric Python code until valid geometry is produced.
 
@@ -6,35 +6,43 @@ Fermeon converts natural language into production-ready CAD files (STEP + STL) u
 
 ## Features
 
-- **7-step generation pipeline** — Intent extraction → domain enrichment → LLM prompt enhancement (Trip 1) → LLM code generation (Trip 2-N) → non-Python stripping + import repair → Python syntax check → CadQuery execution. Each failure stage carries the exact error message and broken code into the next attempt so corrections are targeted, not blind.
-- **Multi-LLM with automatic fallback** — Choose from 13 models across 6 providers. If a model fails or has no API key, Fermeon automatically falls back through the default chain.
-- **Unified 3-attempt self-correction cap** — All failure modes (syntax error, wrong API, CadQuery crash) share the same 3-attempt budget. Each retry feeds the exact error back to the LLM as the correction prompt.
-- **942-domain engineering knowledge base** — Prompts are matched against 942 engineering domains (Aerospace → Textile → Space Systems) to inject domain-specific context and vocabulary into both generation stages.
-- **Automatic import repair** — If the LLM writes `from cadquery import Workplane, Box, ...` (invalid), Fermeon silently rewrites it to `import cadquery as cq` and prefixes all bare class names (`Workplane(` → `cq.Workplane(`). Capitalization typos (`cq.WorkPlane`) are also fixed unconditionally.
-- **Python syntax validation** — `ast.parse` is run on every extracted code block before it reaches the CadQuery executor. A syntax error triggers an immediate targeted correction call instead of a silent crash.
-- **Live token streaming** — Token count and elapsed time are printed to the server terminal in real time (every 20 tokens) so you can see generation progress without waiting for the full response.
-- **Escalating local-model timeouts** — Ollama attempts are given 250 s → 350 s → 450 s. If attempt 1 finishes in 40 s, the result is used immediately; the larger budgets only apply if the earlier attempt actually timed out.
-- **Interactive 3D preview** — Three.js WebGL viewer with orbit/pan/zoom directly in the browser. No plugins required.
-- **Instant STEP + STL export** — Downloads available immediately after each successful generation.
-- **Full session logs** — Every request is logged to `backend/logs/` as JSON including the final generated code, all retry history, token counts, cost estimate, and detected domain.
-- **Black-theme settings panel** — Slide-out drawer groups models by type (Local / Cloud API) with live availability indicators, API key storage, domain selector, and generation toggles.
-- **API keys stored locally only** — Keys are saved in browser `localStorage`, never sent to any server except the target LLM provider.
+- **8-Stage Generation Pipeline** — Intent extraction → Optional Prompt Enhancement (Trip 1) → Domain parsing → 942-domain context injection → Code generation (Trip 2) → Code stripping & safety checks → Python syntax validation → CadQuery Subprocess Execution.
+- **Auto-Correction Engine (3 Trial Loops)** — If CadQuery crashes or throws an exception, Fermeon backpropagates the exact error stack trace to the LLM for targeted self-correction. The system will loop up to 3 times to refine the code until correct geometry is produced. Generated code blocks contain *only* pure valid Python without surrounding fluff.
+- **Multi-LLM with automatic fallback** — Try cloud models (`gemini-2.0-flash`, `claude-3.5-sonnet`, `o3-mini`) or local models (`qwen2.5-coder:14b`). If one fails, it cascades through your preferred chain.
+- **Glassmorphism / Minimalist Web UI** — A brand new vanilla HTML/CSS/JS interface that runs directly off FastAPI. It includes an integrated Three.js STL previewer and secure API-key caching in browser `localStorage`.
+- **Domain-Aware Examples** — System automatically loads different few-shot examples depending on whether you're designing a *sofa* vs a *heat exchanger*.
+- **Direct CEM Execution Engine** — Seamless fallback to Leap 71 Computational Engineering Models for guaranteed zero-failure generation on supported parts.
+
+## 🎨 The Interface
+
+![Landing Page](assets/landingpage.png)
+
+![Settings Drawer](assets/settings_drawer.png)
 
 ---
 
 ## Quick Start
+You'll need **Python 3.8+**.
 
-```bat
-# Windows
+#### Mac / Linux
+```bash
+./start.sh
+```
+
+#### Windows
+```cmd
 start.bat
-
-# PowerShell
+# Or using PowerShell
 ./start.ps1
 ```
 
-The launcher: installs pip dependencies if missing → starts Ollama if installed → starts the FastAPI backend on port 8000 → opens the browser at `http://localhost:8000`.
+The launchers automatically detect Ollama, install standard pip dependencies, start the backend on port `8000`, and open the new modern CAD interface in your default browser.
+
+# Note on API Keys 
+Keys are saved securely in your browser's local storage via the sidebar settings. They are never saved to Fermeon's servers.
 
 ---
+
 
 ## Supported Models
 

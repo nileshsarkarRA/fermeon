@@ -5,10 +5,9 @@ Models wrap code in wildly different ways — this handles all of them.
 """
 
 import ast
-import ast
 import re
 import json
-from typing import Optional
+from typing import Optional, Tuple
 
 
 def extract_code_from_response(raw_response: str) -> str:
@@ -32,6 +31,9 @@ def extract_code_from_response(raw_response: str) -> str:
     python_block = re.search(r'```python\s*(.*?)```', raw_response, re.DOTALL)
     if python_block:
         code = python_block.group(1).strip()
+        code = _auto_fix_cq_imports(code)
+        code = _auto_alias_result(code)
+        code = _strip_display_calls(code)
         if _looks_like_cadquery(code):
             return code
 
@@ -39,6 +41,9 @@ def extract_code_from_response(raw_response: str) -> str:
     generic_block = re.search(r'```(?:\w+)?\s*(.*?)```', raw_response, re.DOTALL)
     if generic_block:
         code = generic_block.group(1).strip()
+        code = _auto_fix_cq_imports(code)
+        code = _auto_alias_result(code)
+        code = _strip_display_calls(code)
         if _looks_like_cadquery(code):
             return code
 
@@ -47,21 +52,33 @@ def extract_code_from_response(raw_response: str) -> str:
         lines = raw_response.split('\n')
         code_start = next(
             (i for i, line in enumerate(lines)
-             if line.strip().startswith(("import", "#", "params", "result", "cq."))),
+             if line.strip().startswith(("import", "#", "params", "result", "cq.", "from cadquery"))),
             0
         )
-        return '\n'.join(lines[code_start:]).strip()
+        code = '\n'.join(lines[code_start:]).strip()
+        code = _auto_fix_cq_imports(code)
+        code = _auto_alias_result(code)
+        code = _strip_display_calls(code)
+        return code
 
     # Pattern 4: Code embedded in explanation — find the code section
     sections = raw_response.split('\n\n')
     for section in sections:
         if _looks_like_cadquery(section):
-            return section.strip()
+            code = section.strip()
+            code = _auto_fix_cq_imports(code)
+            code = _auto_alias_result(code)
+            code = _strip_display_calls(code)
+            return code
 
-    # Pattern 5: Check if there's ANY python import block
+    # Pattern 5: Check if there's ANY python import cadquery block
     any_block = re.search(r'(import cadquery.*)', raw_response, re.DOTALL)
     if any_block:
-        return any_block.group(1).strip()
+        code = any_block.group(1).strip()
+        code = _auto_fix_cq_imports(code)
+        code = _auto_alias_result(code)
+        code = _strip_display_calls(code)
+        return code
 
     raise ValueError(
         f"Could not extract CadQuery Python code from model response. "
@@ -81,8 +98,143 @@ def _looks_like_cadquery(text: str) -> bool:
         ".revolve(",
         ".sphere(",
         ".box(",
+        ".cylinder(",
+        ".shell(",
+        ".fillet(",
+        ".chamfer(",
+        "cq.Assembly",
     ]
     return any(marker in text for marker in cadquery_markers)
+
+
+def _auto_fix_cq_imports(code: str) -> str:
+    """
+    Silently fix common LLM import mistakes:
+    - 'from cadquery import Workplane, ...' → remove, add 'import cadquery as cq'
+    - Bare 'Workplane(' → 'cq.Workplane('
+    - 'cq.WorkPlane(' → 'cq.Workplane('  (capitalisation fix)
+    """
+    # Remove bad from-imports
+    code = re.sub(r'from cadquery import[^\n]*\n', '', code)
+
+    # Ensure correct import is present
+    if 'import cadquery as cq' not in code and 'import cadquery' in code:
+        code = re.sub(r'import cadquery\b', 'import cadquery as cq', code)
+    elif 'import cadquery as cq' not in code and 'cq.Workplane' in code:
+        code = 'import cadquery as cq\n' + code
+
+    # Prefix bare CadQuery class names
+    for cls in ('Workplane', 'Assembly', 'Vector', 'Edge', 'Face', 'Shell', 'Solid'):
+        code = re.sub(rf'(?<!cq\.)\b{cls}\(', f'cq.{cls}(', code)
+
+    # Fix capitalisation typos
+    code = re.sub(r'\bcq\.WorkPlane\b', 'cq.Workplane', code)
+    code = re.sub(r'\bcq\.workplane\b', 'cq.Workplane', code)
+
+    return code
+
+
+def _strip_display_calls(code: str) -> str:
+    """Remove Jupyter/CQ-editor display calls that crash in subprocess."""
+    patterns = [
+        r'\bshow_object\s*\([^)]*\)\s*\n?',
+        r'\bdisplay\s*\([^)]*\)\s*\n?',
+        r'\bshow\s*\([^)]*\)\s*\n?',
+        r'\bcq\.exporters\.export\s*\([^)]*\)\s*\n?',
+    ]
+    for pat in patterns:
+        code = re.sub(pat, '', code)
+    return code
+
+
+def _auto_alias_result(code: str) -> str:
+    """
+    If the code has no 'result = ...' assignment, find the last WorkPlane
+    variable assigned and alias it as 'result'.
+    """
+    if 'result' in code:
+        return code
+
+    # Find last Workplane assignment like: varname = cq.Workplane(...)...
+    matches = list(re.finditer(r'^(\w+)\s*=\s*(?:cq\.Workplane|cq\.Assembly)', code, re.MULTILINE))
+    if matches:
+        last_var = matches[-1].group(1)
+        if last_var != 'result':
+            code += f'\n\nresult = {last_var}\n'
+    return code
+
+
+def validate_python_syntax(code: str) -> Tuple[bool, str]:
+    """
+    Check whether a code string is valid Python using the AST parser.
+    Also performs CadQuery-specific static safety validation.
+    Returns (True, "") on success, (False, error_description) on failure.
+    """
+    try:
+        ast.parse(code)
+    except SyntaxError as exc:
+        return False, f"line {exc.lineno}: {exc.msg}"
+    except Exception as exc:
+        return False, str(exc)
+
+    # CadQuery-specific safety checks
+    try:
+        _validate_code_safety(code)
+    except ValueError as exc:
+        return False, str(exc)
+
+    return True, ""
+
+
+def _validate_code_safety(code: str) -> None:
+    """
+    Static analysis for patterns that always produce wrong geometry or crashes.
+    Raises ValueError with a descriptive message if a bad pattern is found.
+    """
+    # 1. No star-splat unpacking in boolean ops
+    if re.search(r'\.(union|cut|intersect)\(\s*\*', code):
+        raise ValueError(
+            "Star-splat unpacking in .union()/.cut()/.intersect() is invalid — "
+            "second item maps to 'clean=' parameter, silently corrupts geometry. "
+            "Use .union(partA).union(partB) chained calls instead."
+        )
+
+    # 2. No empty boolean calls
+    for op in ('union', 'cut', 'intersect'):
+        if re.search(rf'\.{op}\(\s*\)', code):
+            raise ValueError(
+                f"Empty .{op}() call with no argument — always crashes. "
+                f"Either provide a solid to {op} with, or remove the call."
+            )
+
+    # 3. Non-existent rotation methods
+    for meth in ('rotateAboutX', 'rotateAboutY', 'rotateAboutZ'):
+        if meth in code:
+            raise ValueError(
+                f".{meth}() does not exist in CadQuery. "
+                f"Use .rotate((x1,y1,z1),(x2,y2,z2), angle) or .rotateX/Y/Z() instead."
+            )
+
+    # 4. Lambda geometry factories (objects get discarded)
+    if re.search(r'lambda\s+\w+\s*:\s*cq\.Workplane', code):
+        raise ValueError(
+            "Lambda geometry factories return discarded objects — nothing gets unioned. "
+            "Use a regular function or list comprehension + union chain instead."
+        )
+
+    # 5. sum() list-union pattern
+    if re.search(r'\bsum\s*\(\s*\[', code) and 'cq.Workplane' in code:
+        raise ValueError(
+            "sum(parts, cq.Workplane()) is an invalid list-union pattern. "
+            "Use functools.reduce(lambda a,b: a.union(b), parts) instead."
+        )
+
+    # 6. .fillet() immediately after .union() (high BRep_API crash risk)
+    if re.search(r'\.union\([^)]*\)\s*\.fillet\(', code):
+        raise ValueError(
+            ".fillet() called directly after .union() — high BRep_API crash risk. "
+            "Complete all unions first, then apply filleting to the final result."
+        )
 
 
 def extract_params_from_response(raw_response: str) -> Optional[dict]:
@@ -143,17 +295,3 @@ def extract_json_params(raw_response: str) -> Optional[dict]:
                 except json.JSONDecodeError:
                     return None
     return None
-
-
-def validate_python_syntax(code: str) -> tuple[bool, str]:
-    """
-    Check whether a code string is valid Python using the AST parser.
-    Returns (True, "") on success, (False, error_description) on failure.
-    """
-    try:
-        ast.parse(code)
-        return True, ""
-    except SyntaxError as exc:
-        return False, f"line {exc.lineno}: {exc.msg}"
-    except Exception as exc:
-        return False, str(exc)

@@ -29,10 +29,11 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://localhost:11434", env="OLLAMA_BASE_URL")
 
     # CAD Execution
-    cadquery_timeout_seconds: int = Field(default=30, env="CADQUERY_TIMEOUT_SECONDS")
+    cadquery_timeout_seconds: int = Field(default=60, env="CADQUERY_TIMEOUT_SECONDS")
     max_correction_attempts: int = Field(default=3, env="MAX_CORRECTION_ATTEMPTS")
     enable_fallback: bool = Field(default=True, env="ENABLE_FALLBACK")
     default_model: str = Field(default="gemini/gemini-2.0-flash", env="DEFAULT_MODEL")
+
 
     # Storage (optional — local file storage is the default)
     use_s3: bool = Field(default=False, env="USE_S3")

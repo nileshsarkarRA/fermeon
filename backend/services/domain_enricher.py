@@ -109,17 +109,26 @@ def random_domains(n: int = 8) -> List[str]:
 
 # ── Prompt Enrichment ──────────────────────────────────────────────────────────
 
-def enrich_prompt(user_prompt: str) -> str:
+def enrich_prompt(user_prompt: str, domain: str = "") -> str:
     """
     Prepend a short domain-context hint to the user prompt so the LLM
     understands which engineering domain is being targeted.
 
+    Parameters
+    ----------
+    user_prompt : str
+        The enhanced user prompt from LLM trip 1.
+    domain : str
+        Optional: already-detected domain (e.g. 'furniture') to bias the search.
+
     Example
     -------
     user_prompt  = "design a hip replacement implant"
-    → "[Domain: Orthopaedic Hip Implants / Prosthetic Limb Sockets]\\ndesign a hip replacement implant"
+    → "[Domain: Orthopaedic Hip Implants / Prosthetic Limb Sockets]\ndesign a hip replacement implant"
     """
-    matches = search_domains(user_prompt, n=3)
+    # Bias the search with the known domain string if provided
+    search_text = f"{domain} {user_prompt}" if domain else user_prompt
+    matches = search_domains(search_text, n=3)
     if not matches:
         return user_prompt
     domain_hint = " / ".join(matches[:2])

@@ -40,8 +40,6 @@ def format_prompt_for_model(
     full_user_content = f"{examples_text}\n\nNow generate CadQuery code for:\n{user_prompt}"
 
     # ── Ollama / local models ────────────────────────────────────────────────
-    # Local models perform better with system prompt embedded in user turn.
-    # The [SYSTEM]...[/SYSTEM] wrapper is a known-good pattern for Llama-family.
     if provider == "ollama":
         return [
             {
@@ -51,9 +49,6 @@ def format_prompt_for_model(
         ]
 
     # ── Gemini ───────────────────────────────────────────────────────────────
-    # LiteLLM handles system_instruction translation for Gemini.
-    # We sanitize the system prompt to avoid safety filter false positives on
-    # legitimate engineering terms like "combustion chamber", "explosive bolt".
     if provider == "google":
         safe_system = _gemini_safety_sanitize(system_prompt)
         return [
@@ -62,7 +57,6 @@ def format_prompt_for_model(
         ]
 
     # ── Reasoning models (DeepSeek R1, o1, o3-mini) ─────────────────────────
-    # These models do NOT accept system prompts — inject instructions into user turn.
     reasoning_model_keys = ["deepseek-r1", "o1", "o3", "o1-mini", "o3-mini"]
     if any(rm in model.lower() for rm in reasoning_model_keys):
         return [
@@ -159,11 +153,15 @@ def build_correction_prompt(
     original_prompt: str,
     failed_code: str,
     error_message: str,
+    domain: str = "mechanical",
 ) -> str:
     """
     Build a self-correction prompt when CadQuery execution fails.
     Feed the error back to the LLM so it can fix its own code.
+    Includes domain context to prevent the model from drifting to wrong geometry.
     """
+    domain_hint = _domain_correction_hints(domain)
+
     return f"""The CadQuery code you generated failed with this error:
 ```
 {error_message}
@@ -175,16 +173,57 @@ Your previous code:
 ```
 
 Fix the error. Return ONLY the corrected complete Python code block.
-Do not explain. Just the fixed code.
+Do NOT explain. Just the fixed code.
 
-Common CadQuery fixes:
-- BRep_API command not done: This usually means a fillet or boolean union failed due to complex geometry. Completely REMOVE all `.fillet()` and `.chamfer()` calls from your code and try again.
-- Fillet too large: reduce fillet radius (must be < half the smallest edge length)
-- Non-manifold geometry: ensure all solids are closed before boolean operations
-- Zero-length edge: check all extrude/revolve distances are > 0
-- Cannot union type NoneType: NEVER call `.union()`, `.cut()`, or `.intersect()` without an argument. ALWAYS specify the object to union with, e.g., `partA.union(partB)`.
-- Thread failure: use valid pitch values (e.g., pitch=1.25 for M8)
-- Missing show_object(): always end with show_object(result) or result = ...
+═══════════════════════════════════════════════
+COMMON CADQUERY FIXES:
+═══════════════════════════════════════════════
+• BRep_API command not done → a fillet or boolean union failed. REMOVE all `.fillet()` and `.chamfer()` calls from the broken part and try again without them.
+• Fillet too large → reduce fillet radius (must be < half the smallest edge)
+• Non-manifold geometry → ensure all solids are closed before boolean operations
+• Zero-length edge → check all extrude/revolve distances are > 0
+• NoneType union error → NEVER call `.union()`, `.cut()`, `.intersect()` without an argument. Always: `partA.union(partB)` not `.union()`
+• Thread failure → use valid pitch values (e.g., pitch=1.25 for M8)
+• Star-splat in union → use `.union(a).union(b)` chaining NOT `.union(*list)`
+• rotateAboutX/Y/Z → these don't exist. Use `.rotate(axisPt1, axisPt2, angleDeg)` instead
+• sum() union → use `functools.reduce(lambda a,b: a.union(b), parts)` instead
+• .fillet() after .union() → apply filleting ONLY to the final result, not intermediate parts
+• Empty result → always assign your final solid to `result = ...`
+
+{domain_hint}
 
 Original request was: {original_prompt}
 """
+
+
+def _domain_correction_hints(domain: str) -> str:
+    """Return domain-specific correction hints for the self-correction prompt."""
+    hints = {
+        "furniture": """═══════════════════════════════════════════════
+FURNITURE DOMAIN HINTS:
+═══════════════════════════════════════════════
+• Seat height standard: 420mm from floor
+• All legs: centered=(True,True,False), then .translate() to position
+• Use .union() to join all parts into one solid before any boolean cuts
+• Do NOT use medical, aerospace, or mechanical terminology — furniture parts only""",
+        "architecture": """═══════════════════════════════════════════════
+ARCHITECTURE DOMAIN HINTS:
+═══════════════════════════════════════════════
+• Walls Z_height = Z_top - Z_bottom, ALWAYS third arg in .box(X, Y, Z)
+• Towers must be taller than walls by at least 30mm
+• Absolute Z positioning: use .translate((x, y, z_bottom + height/2))
+• centered=(True,True,False) so Z=0 is the floor""",
+        "aerospace": """═══════════════════════════════════════════════
+AEROSPACE DOMAIN HINTS:
+═══════════════════════════════════════════════
+• Use .revolve() for axisymmetric parts (nozzles, fuselages)
+• Use .loft() for tapered sections and fairings
+• Minimum wall thickness: 1.5mm for AM parts""",
+        "industrial": """═══════════════════════════════════════════════
+INDUSTRIAL DOMAIN HINTS:
+═══════════════════════════════════════════════
+• Flanges: build solid ring first, then cut bore hole through
+• Bolt holes: union all solids first, then cut all holes in one pass
+• Use pushPoints() for bolt-circle patterns, NOT rarray()""",
+    }
+    return hints.get(domain, "")

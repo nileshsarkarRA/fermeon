@@ -6,6 +6,7 @@ Uses LiteLLM for unified API across 100+ models.
 
 from __future__ import annotations
 import os
+import re
 import litellm
 from typing import Optional, List
 from pydantic import BaseModel
@@ -17,9 +18,6 @@ from .key_manager import get_api_key_for_model
 # Suppress LiteLLM verbose logging
 litellm.set_verbose = False
 
-# Tell LiteLLM where Ollama lives (can be overridden per-request)
-litellm.api_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-
 
 class GatewayRequest(BaseModel):
     prompt: str
@@ -28,7 +26,7 @@ class GatewayRequest(BaseModel):
     examples: List[str]
     user_api_key: Optional[str] = None
     temperature: float = 0.1
-    max_tokens: int = 4096
+    max_tokens: int = 8192
 
 
 class LLMGateway:
@@ -45,7 +43,7 @@ class LLMGateway:
         examples: List[str],
         user_api_key: Optional[str] = None,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
     ) -> dict:
         """
         Core generation method. Works with any supported model.
@@ -77,7 +75,7 @@ class LLMGateway:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=90,
+                timeout=120,
             )
             if api_key:
                 kwargs["api_key"] = api_key
@@ -161,7 +159,8 @@ class LLMGateway:
         system_prompt: str,
         user_api_key: Optional[str] = None,
         attempt: int = 1,
-        max_attempts: int = 3,
+        max_attempts: int = 5,
+        domain: str = "mechanical",
     ) -> dict:
         """
         Feed execution error back to LLM for self-correction.
@@ -174,6 +173,7 @@ class LLMGateway:
             original_prompt=original_prompt,
             failed_code=failed_code,
             error_message=error_message,
+            domain=domain,
         )
 
         return await self.generate_cad_code(
@@ -210,10 +210,10 @@ class LLMGateway:
         Trip 1: Enhance the user prompt using the Leap 71 enhancer template.
         Adds geometric precision, domain classification, and engineering parameters.
         Soft-fails: returns the original prompt if the LLM call fails.
-        Returns: {success, enhanced_prompt, model_used, usage}
+        Returns: {success, enhanced_prompt, detected_domain, model_used, usage}
         """
         if model not in SUPPORTED_MODELS:
-            return {"success": True, "enhanced_prompt": prompt, "model_used": model, "usage": {}}
+            return {"success": True, "enhanced_prompt": prompt, "detected_domain": None, "model_used": model, "usage": {}}
 
         model_config = SUPPORTED_MODELS[model]
         api_key = get_api_key_for_model(model_config, user_api_key)
@@ -224,7 +224,7 @@ class LLMGateway:
         try:
             enhancer_system = enhancer_path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return {"success": True, "enhanced_prompt": prompt, "model_used": model, "usage": {}}
+            return {"success": True, "enhanced_prompt": prompt, "detected_domain": None, "model_used": model, "usage": {}}
 
         messages = format_prompt_for_model(
             model=model,
@@ -239,8 +239,8 @@ class LLMGateway:
                 model=model,
                 messages=messages,
                 temperature=0.3,
-                max_tokens=800,
-                timeout=60,
+                max_tokens=1200,
+                timeout=90,
             )
             if api_key:
                 kwargs["api_key"] = api_key
@@ -250,9 +250,16 @@ class LLMGateway:
             response = await litellm.acompletion(**kwargs)
             enhanced = response.choices[0].message.content.strip()
 
+            # Parse the DOMAIN: line from enhancer output
+            detected_domain = None
+            domain_match = re.search(r'^DOMAIN:\s*(\w+)', enhanced, re.MULTILINE | re.IGNORECASE)
+            if domain_match:
+                detected_domain = domain_match.group(1).strip().lower()
+
             return {
                 "success": True,
                 "enhanced_prompt": enhanced or prompt,
+                "detected_domain": detected_domain,
                 "model_used": model,
                 "usage": {
                     "prompt_tokens": getattr(response.usage, "prompt_tokens", 0) or 0,
@@ -270,6 +277,7 @@ class LLMGateway:
                 "success": False,
                 "error": error_msg,
                 "enhanced_prompt": prompt,
+                "detected_domain": None,
                 "model_used": model,
                 "usage": {},
             }
