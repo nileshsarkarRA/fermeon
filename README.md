@@ -39,7 +39,7 @@ start.bat
 The launchers automatically detect Ollama, install standard pip dependencies, start the backend on port `8000`, and open the new modern CAD interface in your default browser.
 
 # Note on API Keys 
-Keys are saved securely in your browser's local storage via the sidebar settings. They are never saved to Fermeon's servers.
+Keys are saved securely in your browser's local storage via the Settings Drawer (gear icon in the top right). They are never saved to Fermeon's servers.
 
 ---
 
@@ -53,9 +53,10 @@ Keys are saved securely in your browser's local storage via the sidebar settings
 | `ollama/codellama:7b` | CodeLlama 7B | 16k | Simple parts, learning |
 | `ollama/codellama:13b` | CodeLlama 13B | 16k | Medium complexity |
 | `ollama/deepseek-coder:6.7b` | DeepSeek Coder 6.7B | 16k | Fast iteration |
-| `ollama/qwen2.5:7b` | Qwen2.5 7B | 32k | Complex parts, best local option |
+| `ollama/qwen2.5-coder:14b` | Qwen 2.5 Coder 14B | 32k | Complex parts, best local option |
+| `ollama/deepseek-r1:14b` | DeepSeek R1 14B | 16k | Reasoning-heavy geometry |
 
-Pull a model: `ollama pull qwen2.5:7b`
+Pull a model: `ollama pull qwen2.5-coder:14b`
 
 Local models are given **escalating timeouts** across the three internal LiteLLM attempts:
 
@@ -72,16 +73,15 @@ If attempt 1 finishes in 40 s, the result is used immediately — the larger bud
 | Model | Provider | Cost/1k tokens | Best For | Env Key |
 |---|---|---|---|---|
 | `gemini/gemini-2.0-flash` | Google | $0.000075 | Fast, cheap, large context | `GEMINI_API_KEY` |
-| `gemini/gemini-2.5-pro` | Google | $0.00125 | Complex assemblies | `GEMINI_API_KEY` |
-| `claude-sonnet-4-5` | Anthropic | $0.003 | Engineering accuracy | `ANTHROPIC_API_KEY` |
-| `claude-haiku-4-5` | Anthropic | $0.00025 | Fast, cheap | `ANTHROPIC_API_KEY` |
+| `gemini/gemini-2.0-pro-exp-02-05` | Google | $0.00125 | Complex assemblies | `GEMINI_API_KEY` |
+| `claude-3-5-sonnet-20241022` | Anthropic | $0.003 | Engineering accuracy | `ANTHROPIC_API_KEY` |
+| `claude-3-7-sonnet-20250219` | Anthropic | $0.003 | Complex iteration, reasoning | `ANTHROPIC_API_KEY` |
 | `gpt-4o` | OpenAI | $0.005 | General purpose | `OPENAI_API_KEY` |
-| `gpt-4o-mini` | OpenAI | $0.000150 | Fast, cheap | `OPENAI_API_KEY` |
+| `o3-mini` | OpenAI | $0.0011 | Fast reasoning | `OPENAI_API_KEY` |
 | `groq/llama-3.1-70b-versatile` | Groq | $0.00059 | Fast open-weights | `GROQ_API_KEY` |
-| `groq/deepseek-r1-distill-llama-70b` | Groq | $0.00075 | Reasoning-heavy geometry | `GROQ_API_KEY` |
 | `mistral/codestral-latest` | Mistral | $0.001 | Code specialist | `MISTRAL_API_KEY` |
 
-Set environment variables or enter keys in the Settings panel. The **default fallback chain** is: `gemini-2.0-flash → llama-3.1-70b (Groq) → qwen2.5:7b (local)`.
+Set environment variables or enter keys in the Settings drawer. The **default fallback chain** is: `gemini-2.0-flash → llama-3.1-70b (Groq) → qwen2.5-coder:14b (local)`.
 
 > **Fallback bail-out rule:** If a model produces code that fails static validation (wrong API usage), Fermeon exits the fallback chain immediately and enters the self-correction loop with that model rather than trying a fresh model from scratch. A targeted correction is more effective than starting over.
 

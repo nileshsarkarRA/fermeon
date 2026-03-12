@@ -36,8 +36,8 @@ SUPPORTED_MODELS = {
         "requires_api_key": False,
         "notes": "Fast and decent quality for code.",
     },
-    "ollama/qwen2.5:7b": {
-        "display_name": "Qwen2.5 7B (Local)",
+    "ollama/qwen2.5-coder:14b": {
+        "display_name": "Qwen 2.5 Coder 14B (Local)",
         "provider": "ollama",
         "type": "local",
         "context_window": 32000,
@@ -45,6 +45,16 @@ SUPPORTED_MODELS = {
         "recommended_for": ["complex parts", "best local option"],
         "requires_api_key": False,
         "notes": "Fastest local model for CadQuery generation.",
+    },
+    "ollama/deepseek-r1:14b": {
+        "display_name": "DeepSeek R1 14B (Local)",
+        "provider": "ollama",
+        "type": "local",
+        "context_window": 16000,
+        "cost_per_1k_tokens": 0.0,
+        "recommended_for": ["reasoning-heavy geometry"],
+        "requires_api_key": False,
+        "notes": "Excellent reasoning model for complex geometric constraints.",
     },
 
     # ── GOOGLE GEMINI ────────────────────────────────────────────
@@ -59,11 +69,11 @@ SUPPORTED_MODELS = {
         "env_key": "GEMINI_API_KEY",
         "notes": "Best bang-for-buck. Often beats pricier models on simple CAD.",
     },
-    "gemini/gemini-2.5-pro": {
-        "display_name": "Gemini 2.5 Pro",
+    "gemini/gemini-2.0-pro-exp-02-05": {
+        "display_name": "Gemini 2.0 Pro",
         "provider": "google",
         "type": "api",
-        "context_window": 1000000,
+        "context_window": 2000000,
         "cost_per_1k_tokens": 0.00125,
         "recommended_for": ["complex assemblies", "highest accuracy"],
         "requires_api_key": True,
@@ -72,8 +82,8 @@ SUPPORTED_MODELS = {
     },
 
     # ── ANTHROPIC CLAUDE ─────────────────────────────────────────
-    "claude-sonnet-4-5": {
-        "display_name": "Claude Sonnet 4.5",
+    "claude-3-5-sonnet-20241022": {
+        "display_name": "Claude 3.5 Sonnet",
         "provider": "anthropic",
         "type": "api",
         "context_window": 200000,
@@ -83,16 +93,16 @@ SUPPORTED_MODELS = {
         "env_key": "ANTHROPIC_API_KEY",
         "notes": "Excellent instruction-following for mechanical constraints.",
     },
-    "claude-haiku-4-5": {
-        "display_name": "Claude Haiku 4.5",
+    "claude-3-7-sonnet-20250219": {
+        "display_name": "Claude 3.7 Sonnet",
         "provider": "anthropic",
         "type": "api",
         "context_window": 200000,
-        "cost_per_1k_tokens": 0.00025,
-        "recommended_for": ["fast", "cheap", "simple parts"],
+        "cost_per_1k_tokens": 0.003,
+        "recommended_for": ["complex iteration", "reasoning"],
         "requires_api_key": True,
         "env_key": "ANTHROPIC_API_KEY",
-        "notes": "Fastest Claude model, great for quick iteration.",
+        "notes": "Latest Claude model, exceptional for code logic.",
     },
 
     # ── OPENAI ───────────────────────────────────────────────────
@@ -107,16 +117,16 @@ SUPPORTED_MODELS = {
         "env_key": "OPENAI_API_KEY",
         "notes": "Popular and well-rounded.",
     },
-    "gpt-4o-mini": {
-        "display_name": "GPT-4o Mini",
+    "o3-mini": {
+        "display_name": "o3-mini",
         "provider": "openai",
         "type": "api",
-        "context_window": 128000,
-        "cost_per_1k_tokens": 0.000150,
-        "recommended_for": ["fast", "cheap"],
+        "context_window": 200000,
+        "cost_per_1k_tokens": 0.0011,
+        "recommended_for": ["fast", "cheap", "reasoning focus"],
         "requires_api_key": True,
         "env_key": "OPENAI_API_KEY",
-        "notes": "Best cheap OpenAI option.",
+        "notes": "Cost-effective reasoning model.",
     },
 
     # ── GROQ (Fast inference) ────────────────────────────────────
