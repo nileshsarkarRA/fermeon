@@ -583,3 +583,56 @@ Find the relevant section below and derive it from first principles.
 
 ══════════════════════════════════════════════════════════════════════════════
 
+
+══════════════════════════════════════════════════════════════════════════════
+                 KNOWN-BAD PATTERNS — NEVER WRITE THESE
+══════════════════════════════════════════════════════════════════════════════
+
+─── Union / Boolean Operations ───
+❌ WRONG: base.union(*[leg1, leg2, leg3])         # star-splat silently corrupts
+✅ RIGHT: base.union(leg1).union(leg2).union(leg3)
+
+❌ WRONG: body.union()                             # empty call → crashes
+✅ RIGHT: body.union(other_part)
+
+─── Rotation ─────────────────────
+❌ WRONG: body.rotateAboutX(45) / .rotateAboutY(90) / .rotateAboutZ(30)   # DO NOT EXIST
+✅ RIGHT: body.rotate((0,0,0),(1,0,0), 45)   # X axis
+✅ RIGHT: body.rotate((0,0,0),(0,1,0), 90)   # Y axis
+✅ RIGHT: body.rotate((0,0,0),(0,0,1), 30)   # Z axis
+
+─── Cylinder Argument Order ──────
+❌ WRONG: cq.Workplane("XY").cylinder(50, 200)   # radius first → wrong
+✅ RIGHT: cq.Workplane("XY").cylinder(200, 50)   # HEIGHT first, then radius
+
+─── Filleting ────────────────────
+❌ WRONG: part_a.fillet(3).union(part_b)         # BRep_API crash
+✅ RIGHT: part_a.union(part_b).fillet(3)          # Fillet ONLY on final solid
+
+─── Imports ──────────────────────
+❌ WRONG: import numpy / import pyvista / import trimesh   # NOT available
+❌ WRONG: from cadquery import Workplane
+✅ RIGHT: import cadquery as cq
+✅ RIGHT: import math
+
+─── Unassigned Geometry ──────────
+❌ WRONG: cq.Workplane("XY").box(100,50,20)     # discarded immediately
+✅ RIGHT: my_box = cq.Workplane("XY").box(100,50,20)
+
+─── Result Variable ──────────────
+❌ WRONG: no result = ... at end of script
+✅ RIGHT: result = my_final_solid              # ALWAYS required
+
+══════════════════════════════════════════════════════════════════════════════
+                        COMPLEXITY BUDGET RULE
+══════════════════════════════════════════════════════════════════════════════
+
+If your object has MORE THAN 6 distinct component solids, use cq.Assembly():
+
+  asm = cq.Assembly()
+  asm.add(wall_north, name="wall_north")
+  asm.add(wall_south, name="wall_south")
+  asm.add(roof,       name="roof")
+  result = asm.toCompound()
+
+══════════════════════════════════════════════════════════════════════════════

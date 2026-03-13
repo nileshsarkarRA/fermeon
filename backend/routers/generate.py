@@ -281,8 +281,9 @@ async def generate_cad(request: GenerateRequest):
     # ── LLM code-generation path ─────────────────────────────────────────────
     plog.job_start(job_id, request.prompt)
 
-    # Stage 2: Enhance prompt (LLM trip 1) — also detects domain
+    # Stage 2: Enhance prompt (LLM trip 1) — also detects domain + produces structured spec
     enhanced_prompt = request.prompt
+    spec_json: Optional[dict] = None
     if request.enhance_prompt:
         plog.stage("enhancing prompt", model=request.model)
         enh = await gateway.enhance_prompt_text(
@@ -292,6 +293,11 @@ async def generate_cad(request: GenerateRequest):
         )
         if enh.get("enhanced_prompt"):
             enhanced_prompt = enh["enhanced_prompt"]
+
+        # Extract structured spec JSON if available (highest-reliability code-gen path)
+        spec_json = enh.get("spec_json")
+        if spec_json:
+            plog.ok(f"structured spec extracted — {len(spec_json.get('components', []))} components")
 
         # Stage 3: Parse domain from the enhancer output
         enhancer_domain = enh.get("detected_domain") or _parse_domain_from_enhanced(enhanced_prompt)
@@ -351,15 +357,24 @@ async def generate_cad(request: GenerateRequest):
                     system_prompt=system_prompt,
                     examples=examples,
                     user_api_key=request.user_api_key,
+                    spec_json=spec_json,
                 )
             else:
-                gen_result = await gateway.generate_cad_code(
-                    prompt=enriched_prompt,
-                    model=request.model,
-                    system_prompt=system_prompt,
-                    examples=examples,
-                    user_api_key=request.user_api_key,
-                )
+                if spec_json:
+                    gen_result = await gateway.generate_from_spec(
+                        spec_json=spec_json,
+                        model=request.model,
+                        system_prompt=system_prompt,
+                        user_api_key=request.user_api_key,
+                    )
+                else:
+                    gen_result = await gateway.generate_cad_code(
+                        prompt=enriched_prompt,
+                        model=request.model,
+                        system_prompt=system_prompt,
+                        examples=examples,
+                        user_api_key=request.user_api_key,
+                    )
         else:
             plog.stage("regenerating (self-correct)", model=model_used)
             gen_result = await gateway.self_correct(
@@ -372,6 +387,7 @@ async def generate_cad(request: GenerateRequest):
                 attempt=attempt_n,
                 max_attempts=MAX,
                 domain=detected_domain,
+                enhanced_spec=spec_json,
             )
 
         total_attempts += 1
@@ -412,7 +428,11 @@ async def generate_cad(request: GenerateRequest):
 
         # Stage 8: Execute CadQuery ───────────────────────────────────────────
         plog.stage("executing CadQuery")
-        exec_result = execute_cadquery_safe(code=code, job_id=job_id)
+        exec_result = execute_cadquery_safe(
+            code=code,
+            job_id=job_id,
+            domain=detected_domain,
+        )
 
         if exec_result.get("success"):
             plog.ok("geometry built — step + stl exported")

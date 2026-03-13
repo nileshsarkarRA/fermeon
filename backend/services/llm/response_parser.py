@@ -113,8 +113,33 @@ def _auto_fix_cq_imports(code: str) -> str:
     - 'from cadquery import Workplane, ...' → remove, add 'import cadquery as cq'
     - Bare 'Workplane(' → 'cq.Workplane('
     - 'cq.WorkPlane(' → 'cq.Workplane('  (capitalisation fix)
+    - Remove forbidden imports (numpy, pyvista, etc.) and replace with comment
     """
-    # Remove bad from-imports
+    # Remove forbidden imports that will crash executor
+    forbidden_imports = [
+        "import numpy",
+        "import pyvista",
+        "import trimesh",
+        "import vtk",
+        "import FreeCAD",
+        "import OCC",
+        "import scipy",
+        "import shapely",
+        "import matplotlib",
+        "from numpy",
+        "from pyvista",
+        "from trimesh",
+        "from OCC",
+    ]
+    for bad_import in forbidden_imports:
+        code = re.sub(
+            rf'^{re.escape(bad_import)}[^\n]*\n?',
+            '# [auto-removed forbidden import: only cadquery and math allowed]\n',
+            code,
+            flags=re.MULTILINE
+        )
+
+    # Remove bad from-imports for cadquery itself
     code = re.sub(r'from cadquery import[^\n]*\n', '', code)
 
     # Ensure correct import is present
@@ -236,6 +261,38 @@ def _validate_code_safety(code: str) -> None:
             "Complete all unions first, then apply filleting to the final result."
         )
 
+    # 7. Forbidden imports (numpy, pyvista, etc. — not available in CQ environment)
+    forbidden = ['numpy', 'pyvista', 'trimesh', 'vtk', 'FreeCAD', 'scipy', 'shapely', 'matplotlib']
+    for lib in forbidden:
+        if re.search(rf'\bimport\s+{lib}\b', code) or re.search(rf'\bfrom\s+{lib}\b', code):
+            raise ValueError(
+                f"'import {lib}' is not available in the CadQuery executor. "
+                f"Only 'import cadquery as cq' and 'import math' are allowed."
+            )
+
+    # 8. Reversed cylinder() argument order heuristic
+    # .cylinder(small_number, large_number) → likely radius-first (wrong)
+    cyl_matches = re.findall(r'\.cylinder\(\s*(\d+\.?\d*)\s*,\s*(\d+\.?\d*)\s*\)', code)
+    for h_arg, r_arg in cyl_matches:
+        h, r = float(h_arg), float(r_arg)
+        if h < 5 and r > 50:
+            raise ValueError(
+                f".cylinder({h_arg}, {r_arg}) looks like reversed args — "
+                f"CadQuery cylinder() signature is (height, radius). "
+                f"HEIGHT is first. Use .cylinder({r_arg}, {h_arg}) if {r_arg} was meant to be the height."
+            )
+
+    # 9. Bare unassigned geometry calls (geometry created but never stored)
+    lines = code.split('\n')
+    for lineno, line in enumerate(lines, 1):
+        stripped = line.strip()
+        # Check for standalone cq.Workplane(...) calls not assigned to anything
+        if re.match(r'^cq\.Workplane\(', stripped) and not re.match(r'^\w+\s*=', stripped) and not stripped.startswith('#'):
+            raise ValueError(
+                f"Line {lineno}: Unassigned cq.Workplane() call — geometry is created then immediately discarded. "
+                f"Always assign: 'my_part = cq.Workplane(...)'"
+            )
+
 
 def extract_params_from_response(raw_response: str) -> Optional[dict]:
     """
@@ -294,4 +351,78 @@ def extract_json_params(raw_response: str) -> Optional[dict]:
                     return json.loads(cleaned[start:i + 1])
                 except json.JSONDecodeError:
                     return None
+    return None
+
+
+def extract_spec_json(raw_response: str) -> Optional[dict]:
+    """
+    Extract the structured geometry spec JSON from an enhancer response.
+    Looks for a SPEC_JSON: prefix followed by a JSON block.
+    Falls back to generic JSON extraction if no prefix marker found.
+    """
+    if not raw_response:
+        return None
+
+    # Strip reasoning blocks
+    cleaned = re.sub(r'<think>.*?</think>', '', raw_response, flags=re.DOTALL).strip()
+
+    # Try SPEC_JSON: marker first
+    spec_match = re.search(r'SPEC_JSON:\s*```(?:json)?\s*(\{.*?\})\s*```', cleaned, re.DOTALL)
+    if spec_match:
+        try:
+            return json.loads(spec_match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Try SPEC_JSON: without fences
+    spec_match2 = re.search(r'SPEC_JSON:\s*(\{.*?\})', cleaned, re.DOTALL)
+    if spec_match2:
+        try:
+            return json.loads(spec_match2.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Fall back to finding any JSON object — use the largest one found
+    # (the spec will generally be the biggest JSON in the response)
+    candidates = []
+    start = 0
+    while True:
+        idx = cleaned.find('{', start)
+        if idx < 0:
+            break
+        depth = 0
+        in_str = False
+        esc = False
+        for i, ch in enumerate(cleaned[idx:], idx):
+            if esc:
+                esc = False
+                continue
+            if ch == '\\' and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = json.loads(cleaned[idx:i + 1])
+                        candidates.append((i - idx, obj))  # (length, parsed)
+                    except json.JSONDecodeError:
+                        pass
+                    start = i + 1
+                    break
+        else:
+            break
+
+    if candidates:
+        # Return the largest JSON object found
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        return candidates[0][1]
+
     return None

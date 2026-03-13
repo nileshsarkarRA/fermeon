@@ -2,6 +2,11 @@
 Fermeon — Prompt Formatter
 Handles per-model quirks: system prompt placement, safety word substitution,
 reasoning model handling, Ollama embedded prompts.
+
+Key improvements (v2):
+- Ultra-strict output enforcement injected into every prompt
+- build_correction_prompt() has error→hint mapping + spec injection
+- Spec-to-code path: takes structured JSON spec → CadQuery code
 """
 
 from __future__ import annotations
@@ -10,6 +15,52 @@ from typing import Optional, List
 
 
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+
+# ── Error → targeted hint mapping ──────────────────────────────────────────
+# Keys are substrings matched against the error message (case-insensitive).
+# First match wins. Injected into the correction prompt.
+_ERROR_HINTS: list[tuple[str, str]] = [
+    ("BRep_API",            "Remove ALL .fillet() and .chamfer() calls — BRep_API means a fillet or boolean union failed. Try without any fillets first."),
+    ("rotateAboutX",        "Use .rotate((0,0,0),(1,0,0), angle) — .rotateAboutX() does NOT exist in CadQuery."),
+    ("rotateAboutY",        "Use .rotate((0,0,0),(0,1,0), angle) — .rotateAboutY() does NOT exist in CadQuery."),
+    ("rotateAboutZ",        "Use .rotate((0,0,0),(0,0,1), angle) — .rotateAboutZ() does NOT exist in CadQuery."),
+    ("cylinder",            "CadQuery .cylinder() signature is (height, radius) — HEIGHT IS FIRST, radius is second."),
+    ("NoneType",            "Never call .union()/.cut()/.intersect() with no argument. Always: partA.union(partB)."),
+    ("star-splat",          "Use .union(a).union(b) chaining, NEVER .union(*list)."),
+    ("sum(",                "Use functools.reduce(lambda a,b: a.union(b), parts) instead of sum()."),
+    ("No result object",    "Assign your final geometry to exactly: result = <your_solid>"),
+    ("Zero-length",         "All .extrude() / .revolve() distances must be > 0. Check every dimension."),
+    ("fillet.*union",       "Apply .fillet() ONLY to the final solid, after ALL .union() calls complete."),
+    ("lambda",              "Do not use lambda for geometry factories. Assign each part as a named variable."),
+    ("import numpy",        "numpy is not available. Use 'import math' for trigonometry and math operations."),
+    ("import pyvista",      "pyvista is not available. Only 'import cadquery as cq' and 'import math' allowed."),
+    ("AttributeError",      "Check method names carefully. Common wrong names: rotateAboutX, WorkPlane (capital P). Use the CadQuery API reference in the system prompt."),
+    ("Timeout",             "Code took too long. Simplify: reduce part count, remove loops, avoid sweeps on complex paths."),
+    ("Fillet",              "Remove all .fillet() and .chamfer() calls — they frequently crash on complex geometry."),
+    ("chamfer",             "Remove all .chamfer() calls — they frequently crash on complex geometry."),
+    ("workplane",           "Check .workplane() offset direction. Use positive offset to move up in Z."),
+]
+
+
+def _get_error_hint(error_message: str) -> str:
+    """Return the most relevant targeted hint for the error, or empty string."""
+    error_lower = error_message.lower()
+    for key, hint in _ERROR_HINTS:
+        if key.lower() in error_lower:
+            return hint
+    return ""
+
+
+# ── Output enforcement (injected at end of every user message) ──────────────
+_OUTPUT_RULE = """
+⛔ OUTPUT RULE (NON-NEGOTIABLE):
+Your response must be EXACTLY this — nothing else:
+```python
+<your CadQuery code here>
+```
+Zero characters before the opening fence. Zero characters after the closing fence.
+No "Here is the code", no explanation, no summary. Just the code block.
+"""
 
 
 def format_prompt_for_model(
@@ -30,14 +81,17 @@ def format_prompt_for_model(
     """
     provider = model_config.get("provider", "unknown")
 
-    # Build examples block
+    # Build examples block (max 1 example to save tokens for richer spec)
     examples_text = ""
     if examples:
-        examples_text = "\n\nEXAMPLES OF CORRECT CADQUERY OUTPUT:\n"
-        for i, ex in enumerate(examples[:2], 1):
-            examples_text += f"\nExample {i}:\n```python\n{ex}\n```\n"
+        examples_text = "\n\nEXAMPLE OF CORRECT CADQUERY OUTPUT (study the Z-stacking and union pattern):\n"
+        examples_text += f"\n```python\n{examples[0]}\n```\n"
 
-    full_user_content = f"{examples_text}\n\nNow generate CadQuery code for:\n{user_prompt}"
+    full_user_content = (
+        f"{examples_text}\n\n"
+        f"Now generate CadQuery code for:\n{user_prompt}"
+        f"\n{_OUTPUT_RULE}"
+    )
 
     # ── Ollama / local models ────────────────────────────────────────────────
     if provider == "ollama":
@@ -149,17 +203,102 @@ def format_cem_prompt_for_model(
     ]
 
 
+def format_spec_prompt_for_model(
+    model: str,
+    system_prompt: str,
+    spec_json: dict,
+    model_config: dict,
+) -> List[dict]:
+    """
+    Format a spec-to-code generation prompt.
+    The LLM receives a structured JSON geometry spec and must return CadQuery code.
+    This is the highest-reliability path — far less room to hallucinate dimensions.
+    """
+    import json as _json
+    spec_text = _json.dumps(spec_json, indent=2)
+
+    user_content = f"""You have been given a structured geometry specification in JSON format.
+Your job is to implement it EXACTLY as described using CadQuery.
+
+GEOMETRY SPEC:
+```json
+{spec_text}
+```
+
+INSTRUCTIONS:
+- Implement every component listed in the spec
+- Use the exact dimensions given (in mm)
+- Follow the assembly_order for .union() calls
+- Use centered=(True, True, False) for all boxes that sit on a floor/surface
+- Translate each part to its z_bottom position
+- Do NOT add components not in the spec
+- Do NOT modify dimensions unless a spec value would produce invalid geometry
+
+{_OUTPUT_RULE}"""
+
+    provider = model_config.get("provider", "unknown")
+
+    if provider == "ollama":
+        return [{"role": "user", "content": f"[SYSTEM]\n{system_prompt}\n[/SYSTEM]\n\n{user_content}"}]
+
+    if provider == "google":
+        return [
+            {"role": "system", "content": _gemini_safety_sanitize(system_prompt)},
+            {"role": "user", "content": user_content},
+        ]
+
+    reasoning_model_keys = ["deepseek-r1", "o1", "o3", "o1-mini", "o3-mini"]
+    if any(rm in model.lower() for rm in reasoning_model_keys):
+        return [{"role": "user", "content": f"Instructions:\n{system_prompt}\n\n{user_content}"}]
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+
 def build_correction_prompt(
     original_prompt: str,
     failed_code: str,
     error_message: str,
     domain: str = "mechanical",
+    enhanced_spec: Optional[dict] = None,
 ) -> str:
     """
     Build a self-correction prompt when CadQuery execution fails.
     Feed the error back to the LLM so it can fix its own code.
-    Includes domain context to prevent the model from drifting to wrong geometry.
+
+    Improvements over v1:
+    - Targeted hint mapped from the specific error type
+    - Original spec (if available) injected so model knows what to build
+    - Domain bounding-box expectation injected
+    - Domain-specific hints still included
     """
+    import json as _json
+
+    targeted_hint = _get_error_hint(error_message)
+    hint_block = ""
+    if targeted_hint:
+        hint_block = f"""
+🎯 SPECIFIC FIX FOR THIS ERROR:
+{targeted_hint}
+"""
+
+    spec_block = ""
+    if enhanced_spec:
+        try:
+            spec_text = _json.dumps(enhanced_spec, indent=2)
+            spec_block = f"""
+ORIGINAL GEOMETRY SPEC (what you were supposed to build):
+```json
+{spec_text}
+```
+Ensure your corrected code implements THIS spec — do not change dimensions or components.
+"""
+        except Exception:
+            pass
+
+    domain_size_hint = _domain_size_expectation(domain)
     domain_hint = _domain_correction_hints(domain)
 
     return f"""The CadQuery code you generated failed with this error:
@@ -167,13 +306,15 @@ def build_correction_prompt(
 {error_message}
 ```
 
-Your previous code:
+Your previous (broken) code:
 ```python
 {failed_code}
 ```
-
+{hint_block}{spec_block}
 Fix the error. Return ONLY the corrected complete Python code block.
 Do NOT explain. Just the fixed code.
+
+{domain_size_hint}
 
 ═══════════════════════════════════════════════
 COMMON CADQUERY FIXES:
@@ -189,11 +330,31 @@ COMMON CADQUERY FIXES:
 • sum() union → use `functools.reduce(lambda a,b: a.union(b), parts)` instead
 • .fillet() after .union() → apply filleting ONLY to the final result, not intermediate parts
 • Empty result → always assign your final solid to `result = ...`
+• numpy/pyvista/trimesh → FORBIDDEN. Only `import cadquery as cq` and `import math` allowed.
+• cylinder arg order → `.cylinder(HEIGHT, RADIUS)` — height is FIRST
 
 {domain_hint}
 
 Original request was: {original_prompt}
-"""
+
+{_OUTPUT_RULE}"""
+
+
+def _domain_size_expectation(domain: str) -> str:
+    """Return a domain bounding-box expectation hint."""
+    expectations = {
+        "furniture":            "⚠️  A furniture piece should be 100mm–4000mm in its largest dimension (e.g. sofa ~2100mm, chair ~900mm).",
+        "architecture":         "⚠️  An architectural structure should be 50mm–100,000mm in its largest dimension.",
+        "aerospace":            "⚠️  An aerospace part should be 30mm–60,000mm in its largest dimension.",
+        "biomedical":           "⚠️  A biomedical part should be 2mm–800mm in its largest dimension.",
+        "industrial":           "⚠️  An industrial part should be 10mm–10,000mm in its largest dimension.",
+        "mechanical":           "⚠️  A mechanical part should be 2mm–2,000mm in its largest dimension.",
+        "automotive":           "⚠️  An automotive part should be 10mm–5,000mm in its largest dimension.",
+        "consumer_electronics": "⚠️  A consumer electronics part should be 5mm–600mm in its largest dimension.",
+        "organic":              "⚠️  An organic/decorative part should be 5mm–5,000mm in its largest dimension.",
+        "marine":               "⚠️  A marine part should be 50mm–50,000mm in its largest dimension.",
+    }
+    return expectations.get(domain, "")
 
 
 def _domain_correction_hints(domain: str) -> str:

@@ -13,14 +13,14 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 # Maps domain → ordered list of example file stems to try (best first)
 _DOMAIN_TO_EXAMPLES: dict[str, list[str]] = {
-    "furniture":            ["sofa", "chair", "furniture"],
-    "architecture":         ["architecture"],
+    "furniture":            ["chair", "table", "sofa", "furniture"],
+    "architecture":         ["building", "architecture"],
     "aerospace":            ["wing_section", "nozzle"],
     "biomedical":           ["pressure_flange", "vessel"],
     "industrial":           ["pressure_flange", "vessel"],
     "marine":               ["vessel"],
     "consumer_electronics": ["enclosure"],
-    "organic":              ["sphere"],
+    "organic":              ["mug", "sphere"],
     "mechanical":           ["bracket", "gear"],
     "automotive":           ["bracket"],
     "generic":              ["bracket"],
@@ -28,7 +28,10 @@ _DOMAIN_TO_EXAMPLES: dict[str, list[str]] = {
 
 # Part-type → example file stem overrides (always tried first)
 _PART_TYPE_TO_EXAMPLE: dict[str, str] = {
-    "furniture":       "sofa",
+    "furniture":       "chair",
+    "chair":           "chair",
+    "table":           "table",
+    "sofa":            "sofa",
     "bracket":         "bracket",
     "gear":            "gear",
     "nozzle":          "nozzle",
@@ -38,8 +41,12 @@ _PART_TYPE_TO_EXAMPLE: dict[str, str] = {
     "flange":          "pressure_flange",
     "vessel":          "vessel",
     "wing_section":    "wing_section",
-    "architecture":    "architecture",
+    "architecture":    "building",
+    "building":        "building",
     "handheld_device": "enclosure",
+    "mug":             "mug",
+    "bowl":            "mug",
+    "vase":            "mug",
 }
 
 
@@ -94,7 +101,7 @@ def load_examples(part_type: str = "generic", domain: str = "") -> List[str]:
     # 2. Domain-ordered fallbacks
     domain_key = domain if domain in _DOMAIN_TO_EXAMPLES else part_type
     for stem in _DOMAIN_TO_EXAMPLES.get(domain_key, []):
-        if len(found) >= 2:
+        if len(found) >= 1:   # 1 example max — saves tokens for richer spec
             break
         content = _load(stem)
         if content and content not in found:
@@ -106,7 +113,7 @@ def load_examples(part_type: str = "generic", domain: str = "") -> List[str]:
         if content:
             found.append(content)
 
-    return found[:2]
+    return found[:1]   # 1 example max
 
 
 def extract_intent(prompt: str, model: str = None) -> dict:

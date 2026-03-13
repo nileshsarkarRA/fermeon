@@ -2,6 +2,8 @@
 Fermeon — Safe CadQuery Executor
 Executes LLM-generated CadQuery code in a restricted subprocess with timeout.
 Exports STEP + STL + OBJ files.
+
+v2: adds post-execution bounding-box sanity check via domain_bounds.py
 """
 
 import subprocess
@@ -13,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Optional
 from config.settings import settings
+from config.domain_bounds import get_bounds
 
 
 # Template that wraps generated CadQuery code to ensure proper export
@@ -80,9 +83,11 @@ def execute_cadquery_safe(
     job_id: Optional[str] = None,
     output_dir: Optional[str] = None,
     timeout: Optional[int] = None,
+    domain: Optional[str] = None,
 ) -> dict:
     """
     Execute CadQuery code in a subprocess with timeout.
+    Optionally checks geometry bounding-box against domain-expected size range.
     Returns: {success, paths, error, job_id}
     """
     job_id = job_id or str(uuid.uuid4())[:8]
@@ -140,6 +145,20 @@ def execute_cadquery_safe(
         if stderr and not exec_result.get("success"):
             exec_result["stderr"] = stderr[:500]
 
+        # ── Bounding-box sanity check ────────────────────────────────────────
+        if exec_result.get("success") and domain:
+            bbox_warn = _check_bounding_box(
+                exec_result.get("paths", {}).get("step", ""),
+                domain,
+            )
+            if bbox_warn:
+                # Treat as a failure so self-correction can fix scale issues
+                return {
+                    "success": False,
+                    "error": bbox_warn,
+                    "job_id": job_id,
+                }
+
         return exec_result
 
     except subprocess.TimeoutExpired:
@@ -160,6 +179,42 @@ def execute_cadquery_safe(
             os.unlink(script_path)
         except Exception:
             pass
+
+
+def _check_bounding_box(step_path: str, domain: str) -> str:
+    """
+    Import the generated STEP file and verify its bounding-box is within
+    the expected range for the domain.
+    Returns an error string if out-of-range, empty string if OK or check unavailable.
+    """
+    if not step_path or not os.path.exists(step_path):
+        return ""
+
+    try:
+        import cadquery as cq
+        bounds = get_bounds(domain)
+        result_obj = cq.importers.importStep(step_path)
+        bb = result_obj.val().BoundingBox()
+        max_dim = max(bb.xlen, bb.ylen, bb.zlen)
+
+        if max_dim < bounds["min"]:
+            return (
+                f"Geometry too small for domain '{domain}': "
+                f"largest dimension is {max_dim:.2f}mm but minimum expected is {bounds['min']}mm. "
+                f"Check that all dimensions use mm (not meters or cm) and are realistic."
+            )
+        if max_dim > bounds["max"]:
+            return (
+                f"Geometry too large for domain '{domain}': "
+                f"largest dimension is {max_dim:.2f}mm but maximum expected is {bounds['max']}mm. "
+                f"Check dimension values — possible unit confusion (meters vs mm) or off-by-1000 error."
+            )
+        return ""
+
+    except Exception:
+        # Never let bbox check crash the pipeline — just skip if CQ import fails
+        return ""
+
 
 
 def execute_cem_direct(

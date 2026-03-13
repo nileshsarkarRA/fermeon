@@ -302,3 +302,57 @@ DERIVED VALUES:
   * NOTE for programmer: use pushPoints([...bolt_pts]) where bolt_pts is computed from bolt_circle_r and bolt_count
 
 
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MANDATORY SPEC_JSON OUTPUT — ALWAYS APPEND AT THE VERY END OF YOUR RESPONSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After your full geometric specification (Master Parameters, Derived Values,
+and all component descriptions), you MUST append a structured JSON section
+in exactly this format:
+
+SPEC_JSON:
+```json
+{
+  "domain": "<one of: furniture|architecture|aerospace|biomedical|industrial|marine|consumer_electronics|organic|mechanical|automotive|generic>",
+  "part_name": "<human name of the object>",
+  "components": [
+    {
+      "name": "<component_variable_name>",
+      "primitive": "<box|cylinder|sphere|loft|revolve|sweep>",
+      "dims_mm": {<key-value pairs: x, y, z for box; dia and h for cylinder; etc>},
+      "z_bottom": <Z coordinate of bottom face in mm, 0 = floor>,
+      "count": <optional: integer if multiple copies>,
+      "positions": "<optional: description of pushPoints or translation>"
+    }
+  ],
+  "assembly_order": ["<component_name_1>", "<component_name_2>", ...],
+  "operations": ["<union_all|cut_holes|fillet_r2|etc>"]
+}
+```
+
+RULES FOR SPEC_JSON:
+- Include EVERY component you described in the geometric specification
+- Use the exact same variable names you used in your prose spec
+- z_bottom MUST equal the Z of the bottom face of each component (0 = floor)
+- dims_mm MUST match the derived MASTER PARAMETER values exactly — no new numbers
+- assembly_order lists components in the union() sequence (load-bearing first)
+- operations lists the steps after all unions: e.g. "cut_bolt_holes", "fillet_r3"
+- If the object has > 6 components, add a note: "use_assembly": true
+
+EXAMPLE (chair):
+SPEC_JSON:
+```json
+{
+  "domain": "furniture",
+  "part_name": "dining chair",
+  "components": [
+    {"name": "legs", "primitive": "cylinder", "dims_mm": {"dia": 35, "h": 380}, "z_bottom": 0, "count": 4, "positions": "pushPoints at ±185mm x ±175mm corners"},
+    {"name": "seat_board", "primitive": "box", "dims_mm": {"x": 450, "y": 420, "z": 40}, "z_bottom": 380},
+    {"name": "backrest", "primitive": "box", "dims_mm": {"x": 450, "y": 35, "z": 480}, "z_bottom": 420}
+  ],
+  "assembly_order": ["legs", "seat_board", "backrest"],
+  "operations": ["union_all"]
+}
+```
